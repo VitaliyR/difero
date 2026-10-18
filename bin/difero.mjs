@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { accessSync, constants, readFileSync } from 'node:fs';
+import { delimiter, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer } from '../server/index.mjs';
 
@@ -34,13 +34,32 @@ function parsePort() {
 
 function openBrowser(url) {
   const platform = process.platform;
-  const command = platform === 'darwin' ? 'open' : platform === 'win32' ? 'cmd' : 'xdg-open';
-  const args = platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  // Editors like VS Code Remote set BROWSER to a helper that opens URLs on the local machine.
+  const command =
+    process.env.BROWSER ||
+    (platform === 'darwin' ? 'open' : platform === 'win32' ? 'cmd' : 'xdg-open');
+  const args = platform === 'win32' && !process.env.BROWSER ? ['/c', 'start', '', url] : [url];
   const child = spawn(command, args, { stdio: 'ignore', detached: true });
   child.on('error', () => {
     console.error(`Could not open a browser automatically. Open ${url} yourself.`);
   });
   child.unref();
+}
+
+function isRemoteSession() {
+  const { SSH_CONNECTION, SSH_CLIENT, SSH_TTY, BROWSER } = process.env;
+  return Boolean((SSH_CONNECTION || SSH_CLIENT || SSH_TTY) && !BROWSER);
+}
+
+function hasCommand(name) {
+  return (process.env.PATH ?? '').split(delimiter).some((dir) => {
+    try {
+      accessSync(join(dir, name), constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 if (args.includes('-h') || args.includes('--help')) {
@@ -57,7 +76,21 @@ if (args.includes('-h') || args.includes('--help')) {
     const header = `difero v${version}  `;
     const indent = ' '.repeat(header.length);
     console.log(`${header}${root}\n${indent}${url}\n${indent}Press Ctrl+C to stop.`);
-    if (!args.includes('--no-open')) openBrowser(url);
+    if (isRemoteSession()) {
+      const { port } = server.address();
+      const ssh = `ssh -L ${port}:127.0.0.1:${port} <host>`;
+      console.log(
+        hasCommand('tailscale')
+          ? `${indent}Over SSH? Publish it to your tailnet with Tailscale:\n` +
+              `${indent}  tailscale serve --bg --https=${port} http://127.0.0.1:${port}\n` +
+              `${indent}Or forward the port from your machine and open the URL there:\n` +
+              `${indent}  ${ssh}`
+          : `${indent}Over SSH? Forward the port from your machine, then open the URL there:\n` +
+              `${indent}  ${ssh}`,
+      );
+    } else if (!args.includes('--no-open')) {
+      openBrowser(url);
+    }
     for (const signal of ['SIGINT', 'SIGTERM']) {
       process.on(signal, () => server.close(() => process.exit(0)));
     }

@@ -78,9 +78,15 @@ export function createDiff({
       themeType: 'dark',
       diffStyle: 'unified',
       disableFileHeader: true,
-      hunkSeparators: 'simple',
+      hunkSeparators: 'line-info',
+      expansionLineCount: 30,
       enableGutterUtility: true,
       lineHoverHighlight: 'both',
+      // The library's overscroll-behavior-x: none makes Chrome latch any wheel
+      // gesture that starts with a horizontal component to the code block, which
+      // can't scroll vertically, so the page ignores the rest of the gesture.
+      unsafeCSS:
+        '[data-code] { overscroll-behavior-x: auto; } [data-separator-content] { cursor: pointer; }',
       renderGutterUtility(getHoveredLine) {
         const host = document.createElement('span');
         gutterMounted.push(
@@ -104,6 +110,20 @@ export function createDiff({
     for (const component of mounted.splice(0)) unmount(component);
   }
 
+  function expandFromSeparator(event) {
+    const path = event.composedPath();
+    if (path.some((node) => node instanceof Element && node.hasAttribute('data-expand-button')))
+      return;
+    const separator = path.find(
+      (node) => node instanceof Element && node.hasAttribute('data-expand-index'),
+    );
+    if (!separator) return;
+    event.stopPropagation();
+    const hunkIndex = Number(separator.getAttribute('data-expand-index'));
+    instance.expandHunk(hunkIndex, separator.hasAttribute('data-separator-last') ? 'up' : 'down');
+  }
+  container.addEventListener('click', expandFromSeparator, true);
+
   instance.render({
     fileDiff: metadata,
     lineAnnotations: annotationsFor(getComments(), getDraft()),
@@ -118,6 +138,7 @@ export function createDiff({
     },
     cleanUp() {
       clearAnnotations();
+      container.removeEventListener('click', expandFromSeparator, true);
       for (const component of gutterMounted) unmount(component);
       instance.cleanUp();
     },

@@ -45,6 +45,105 @@ open the URL yourself.
 
 Run `difero -h` or `difero --help` to see the available CLI options and version.
 
+## Remote machines
+
+difero only listens on `127.0.0.1`, so when it runs on a server or VPS, other
+machines cannot reach it directly. There are two ways to open it in the browser
+on your own machine: publish it to your tailnet with Tailscale, or forward its
+port over SSH.
+
+When difero runs over SSH, it does not try to open a browser on the server. It
+prints the commands for both options instead, filled in with the port it
+actually uses:
+
+```
+difero v1.1.0  /home/alice/projects/my-app
+               http://127.0.0.1:4747/
+               Press Ctrl+C to stop.
+               Over SSH? Publish it to your tailnet with Tailscale:
+                 tailscale serve --bg --https=4747 http://127.0.0.1:4747
+               Or forward the port from your machine and open the URL there:
+                 ssh -L 4747:127.0.0.1:4747 <host>
+```
+
+The Tailscale line only shows when the `tailscale` command is installed on the
+server.
+
+### With Tailscale
+
+If the server and your devices are on the same tailnet, let Tailscale publish
+difero. On the server, run this once:
+
+```sh
+tailscale serve --bg --https=4747 http://127.0.0.1:4747
+```
+
+Say the server's Tailscale name is `dev` and your tailnet is
+`example-tailnet.ts.net`. Open `https://dev.example-tailnet.ts.net:4747/` from
+your laptop or phone. Run `tailscale serve status` to see the exact URL.
+
+- **One-time setup.** `--bg` keeps the mapping across reboots and new sessions.
+  Start difero whenever you need it and reload the page.
+- **No SSH session needed.** The page works as long as difero is running on the
+  server, for example inside tmux.
+- **Only your tailnet.** The page is never on the public internet. difero has no
+  login, though, so anyone on your tailnet who can reach the server can read
+  your diffs.
+- **One mapping per port.** If difero moves to 4748 because 4747 is taken, that
+  port needs its own `tailscale serve` line. Give each repo a fixed port with
+  `--port` and a mapping for each.
+- **First run.** Tailscale may ask you to enable HTTPS certificates for your
+  tailnet. On Linux, run the command with `sudo` unless you have set yourself as
+  operator with `sudo tailscale set --operator=$USER`.
+- **Removing it.** Run `tailscale serve --https=4747 off`.
+
+### With SSH port forwarding
+
+Say your server is `dev.example.com` and you log in as `alice`. On your own
+machine, connect with the port forwarded:
+
+```sh
+ssh -L 4747:127.0.0.1:4747 alice@dev.example.com
+```
+
+Then, in that SSH session:
+
+```sh
+cd ~/projects/my-app
+npx difero
+```
+
+Open `http://127.0.0.1:4747/` in your local browser. Most terminals let you
+Cmd-click or Ctrl-click the URL.
+
+To skip `-L` every time, add the forward to `~/.ssh/config` on your own machine:
+
+```
+Host dev
+  HostName dev.example.com
+  User alice
+  LocalForward 4747 127.0.0.1:4747
+```
+
+Now `ssh dev` forwards the port on every connection.
+
+A few things to keep in mind:
+
+- **Port in use on the server.** If 4747 is taken there, difero picks the next
+  free port, such as 4748, and the printed command shows it. Forward that port
+  instead, or run `npx difero --port 4747` so it fails rather than moving.
+- **Port in use on your machine.** If a local difero already uses 4747, forward
+  to another local port, such as
+  `ssh -L 5747:127.0.0.1:4747 alice@dev.example.com`, and open
+  `http://127.0.0.1:5747/`.
+- **Adding a forward to an open session.** Press Enter, type `~C`, and enter
+  `-L 4747:127.0.0.1:4747`.
+- **Saved comments.** The browser stores comments per address, so use the same
+  local port each time and `127.0.0.1` rather than `localhost`.
+- **VS Code Remote-SSH and Cursor.** Their terminals forward ports on their own
+  and set `BROWSER`, which difero uses to open the page in your local browser.
+  No `-L` is needed.
+
 ## Review workflow
 
 | Key     | View                                                        |

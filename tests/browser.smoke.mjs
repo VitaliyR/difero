@@ -444,3 +444,36 @@ test('a review whose snapshot expired reloads instead of failing', async (t) => 
   assert.equal(await page.locator('#toast').innerText(), '');
   assert.deepEqual(errors, []);
 });
+
+test('clicking a separator bar reveals 30 lines next to the change', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'difero-browser-expand-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.email', 'test@example.com');
+  git(root, 'config', 'user.name', 'Test');
+  git(root, 'config', 'commit.gpgsign', 'false');
+  const lines = Array.from({ length: 110 }, (_, index) => `line ${index + 1}`);
+  await writeFile(join(root, 'file.txt'), `${lines.join('\n')}\n`);
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'initial');
+  lines[104] = 'changed';
+  await writeFile(join(root, 'file.txt'), `${lines.join('\n')}\n`);
+
+  const { server, url } = await startServer({ cwd: root, assetsDir });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
+  await page.goto(url);
+  const code = page.locator('.pierre-container [data-code]');
+  await code.waitFor();
+  await code.getByText('100 unmodified lines').first().waitFor();
+  for (const remaining of [70, 40, 10]) {
+    const bar = code.locator('[data-separator-content]').first();
+    const box = await bar.boundingBox();
+    await bar.click({ position: { x: box.width - 10, y: box.height / 2 } });
+    await code.getByText(`${remaining} unmodified lines`).first().waitFor();
+  }
+  assert.equal(await code.getByText('line 71', { exact: true }).count(), 1);
+  assert.equal(await code.getByText('line 10', { exact: true }).count(), 0);
+});

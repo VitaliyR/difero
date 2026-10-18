@@ -87,10 +87,16 @@ async function makeRepo(t) {
   return root;
 }
 
-function runCli(t, root, args) {
-  const child = spawn(process.execPath, [cli, '--no-open', ...args], {
+function withoutSsh(env) {
+  const dropped = ['SSH_CONNECTION', 'SSH_CLIENT', 'SSH_TTY', 'BROWSER'];
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !dropped.includes(key)));
+}
+
+function runCli(t, root, args, { env = {}, open = false } = {}) {
+  const child = spawn(process.execPath, [cli, ...(open ? [] : ['--no-open']), ...args], {
     cwd: root,
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...withoutSsh(process.env), ...env },
   });
   t.after(() => child.kill('SIGTERM'));
   let output = '';
@@ -103,7 +109,7 @@ function runCli(t, root, args) {
       const match = output.match(/http:\/\/127\.0\.0\.1:(\d+)\//);
       if (match) {
         clearTimeout(timeout);
-        resolve({ child, url: match[0], port: Number(match[1]) });
+        resolve({ child, url: match[0], port: Number(match[1]), output: () => output });
       }
     });
     child.on('exit', (code) => {
@@ -182,3 +188,65 @@ test('rejects an invalid --port value', async (t) => {
     assert.match(result.errorOutput, /invalid --port value/);
   }
 });
+
+test('over SSH it prints a port forwarding hint instead of opening a browser', async (t) => {
+  const root = await makeRepo(t);
+  const launcherDir = join(root, 'bin');
+  const marker = join(root, 'browser-opened');
+  await mkdir(launcherDir);
+  for (const launcher of ['open', 'xdg-open']) {
+    await writeFile(join(launcherDir, launcher), `#!/bin/sh\ntouch "${marker}"\n`, { mode: 0o755 });
+  }
+  const result = await runCli(t, root, [], {
+    open: true,
+    env: { SSH_CONNECTION: '10.0.0.1 1 10.0.0.2 22', PATH: `${launcherDir}:${process.env.PATH}` },
+  });
+  await delay(100);
+  const { port } = result;
+  assert.ok(result.output().includes(`ssh -L ${port}:127.0.0.1:${port} <host>`), result.output());
+  await assert.rejects(stat(marker), { code: 'ENOENT' });
+});
+
+test(
+  'over SSH with Tailscale installed it also suggests tailscale serve',
+  { skip: process.platform === 'win32' },
+  async (t) => {
+    const root = await makeRepo(t);
+    const launcherDir = join(root, 'bin');
+    await mkdir(launcherDir);
+    await writeFile(join(launcherDir, 'tailscale'), '#!/bin/sh\n', { mode: 0o755 });
+    const result = await runCli(t, root, [], {
+      env: { SSH_CONNECTION: '10.0.0.1 1 10.0.0.2 22', PATH: `${launcherDir}:${process.env.PATH}` },
+    });
+    await delay(100);
+    const { port } = result;
+    const output = result.output();
+    assert.ok(
+      output.includes(`tailscale serve --bg --https=${port} http://127.0.0.1:${port}`),
+      output,
+    );
+    assert.ok(output.includes(`ssh -L ${port}:127.0.0.1:${port} <host>`), output);
+  },
+);
+
+test(
+  'BROWSER is used to open the URL, even over SSH',
+  { skip: process.platform === 'win32' },
+  async (t) => {
+    const root = await makeRepo(t);
+    const marker = join(root, 'browser-opened');
+    const browser = join(root, 'browser.sh');
+    await writeFile(browser, `#!/bin/sh\nprintf %s "$1" > "${marker}"\n`, { mode: 0o755 });
+    const result = await runCli(t, root, [], {
+      open: true,
+      env: { SSH_CONNECTION: '10.0.0.1 1 10.0.0.2 22', BROWSER: browser },
+    });
+    let opened;
+    for (let attempt = 0; attempt < 50 && !opened; attempt++) {
+      await delay(20);
+      opened = await readFile(marker, 'utf8').catch(() => undefined);
+    }
+    assert.equal(opened, result.url);
+    assert.ok(!result.output().includes('ssh -L'));
+  },
+);
