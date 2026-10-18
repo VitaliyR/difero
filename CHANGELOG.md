@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.0](https://github.com/VitaliyR/difero/compare/difero-v1.1.0...difero-v1.2.0) (2026-10-18)
+
+
+### Features
+
+* better port handling ([31ea6c9](https://github.com/VitaliyR/difero/commit/31ea6c92d1109966bc22b213ff205a82fea4cc6b))
+* mobile version ([83ecf6b](https://github.com/VitaliyR/difero/commit/83ecf6be59e0b8df3ae532f9bd7857c7a0cdebd3))
+* remote access hints ([67f4c6c](https://github.com/VitaliyR/difero/commit/67f4c6cb4ad59cca8f4902a33cea0e5c228ad188))
+
 ## [1.1.0](https://github.com/VitaliyR/difero/compare/difero-v1.0.0...difero-v1.1.0) (2026-10-18)
 
 
