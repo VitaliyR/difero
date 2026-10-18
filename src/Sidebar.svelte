@@ -310,27 +310,16 @@
     color: var(--del);
   }
 
-  @media (max-width: 620px) {
-    .sidebar-stats {
-      display: none;
-    }
+  @media (max-width: 760px) {
     .sidebar {
-      position: relative;
-      top: auto;
+      position: static;
+      flex: 1;
+      min-height: 0;
       height: auto;
-      max-height: 210px;
-      border-right: 0;
-      border-bottom: 1px solid var(--border-subtle);
     }
-    .sidebar-heading {
-      padding: 10px 15px;
-    }
-    .search-wrap {
-      margin-bottom: 7px;
-    }
-    .file-list {
-      overflow: auto;
-      padding: 4px 8px;
+    .file-row,
+    .folder-row {
+      min-height: 36px;
     }
   }
 </style>

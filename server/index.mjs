@@ -4,7 +4,7 @@ import { findRoot } from './git.mjs';
 import { createSnapshots, serveDiff, serveFile } from './routes/diff.mjs';
 import { serveImage } from './routes/image.mjs';
 
-export async function startServer({ cwd, assetsDir }) {
+export async function startServer({ cwd, assetsDir, port = 0 }) {
   const root = await findRoot(cwd);
   const snapshots = createSnapshots();
   const server = createServer(async (request, response) => {
@@ -36,7 +36,7 @@ export async function startServer({ cwd, assetsDir }) {
   });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(port, '127.0.0.1', resolve);
   });
   return { server, root, url: `http://127.0.0.1:${server.address().port}/` };
 }

@@ -32,6 +32,11 @@ pnpm run build
 pnpm start
 ```
 
+For frontend work, `pnpm dev` serves the UI through Vite with hot reload and
+proxies `/api` to the difero server, which restarts on changes in `server/`
+without reopening the browser. Pass a path to review another repo:
+`pnpm dev ../other-repo`.
+
 The CLI binds to a free port on `127.0.0.1`, opens your browser, and stays
 running until Ctrl+C. Use `--no-open` if you want to open the URL yourself.
 

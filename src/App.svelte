@@ -5,12 +5,16 @@
   import DiffCard from './DiffCard.svelte';
   import HelpDialog from './HelpDialog.svelte';
   import { ReviewState } from './reviewState.svelte.js';
+  import { tooltip } from './tooltip.js';
+  import closeIcon from './assets/close.svg';
 
   const SIDEBAR_KEY = 'difero:sidebar-width';
   const review = new ReviewState();
 
   let sidebarWidth = $state(270);
   let shortcutsOpen = $state(false);
+  let sidebarOpen = $state(false);
+  let repoName = $derived(review.root.split('/').at(-1));
   let resizeHandle;
   let sidebar;
   let layout;
@@ -57,8 +61,16 @@
     sessionStorage.setItem(SIDEBAR_KEY, String(width));
   }
 
+  $effect(() => {
+    document.documentElement.classList.toggle('sidebar-open', sidebarOpen);
+  });
+
   function handleKeyDown(event) {
     if (shortcutsOpen) return;
+    if (sidebarOpen && event.key === 'Escape') {
+      sidebarOpen = false;
+      return;
+    }
     if (
       event.metaKey ||
       event.ctrlKey ||
@@ -108,10 +120,31 @@
   onReload={() => review.reload()}
   onCopy={(options) => review.copyComments(options)}
   onHelp={() => (shortcutsOpen = true)}
+  onToggleSidebar={() => (sidebarOpen = !sidebarOpen)}
 />
 
-<div id="layout" class="layout" style={`--sidebar-width:${sidebarWidth}px`} bind:this={layout}>
+<div
+  id="layout"
+  class="layout"
+  class:sidebar-open={sidebarOpen}
+  style={`--sidebar-width:${sidebarWidth}px`}
+  bind:this={layout}
+>
   <div class="sidebar-shell" bind:this={sidebar}>
+    <div class="drawer-heading">
+      <img class="drawer-logo" src="/logo.png" alt="Difero" />
+      {#if repoName && repoName.toLowerCase() !== 'difero'}
+        <span class="drawer-repo" {@attach tooltip(review.root)}>{repoName}</span>
+      {/if}
+      <button
+        type="button"
+        class="drawer-close"
+        aria-label="Close files"
+        onclick={() => (sidebarOpen = false)}
+      >
+        <span class="close-icon" style={`mask-image:url('${closeIcon}')`} aria-hidden="true"></span>
+      </button>
+    </div>
     <Sidebar
       files={review.files}
       loaded={review.loaded}
@@ -121,9 +154,19 @@
       collapsedFolders={review.collapsedFolders}
       onSearch={(value) => (review.search = value)}
       onToggleFolder={(path) => review.toggleFolder(path)}
-      onNavigate={(path) => review.navigateToFile(path)}
+      onNavigate={(path) => {
+        sidebarOpen = false;
+        review.navigateToFile(path);
+      }}
     />
   </div>
+  <button
+    type="button"
+    class="sidebar-backdrop"
+    tabindex="-1"
+    aria-label="Close files"
+    onclick={() => (sidebarOpen = false)}
+  ></button>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
     id="sidebar-resize"
@@ -202,6 +245,10 @@
   }
   .sidebar-shell {
     min-width: 0;
+  }
+  .drawer-heading,
+  .sidebar-backdrop {
+    display: none;
   }
   .sidebar-resize {
     background: var(--border-subtle);
@@ -296,12 +343,99 @@
       padding: 18px 12px 70px;
     }
   }
-  @media (max-width: 620px) {
+  @media (max-width: 760px) {
     .layout {
       display: block;
     }
+    .sidebar-shell {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 30;
+      width: min(320px, 85vw);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      box-shadow: 0 12px 28px var(--shadow);
+      transform: translateX(-100%);
+      visibility: hidden;
+      transition:
+        transform 0.2s ease,
+        visibility 0.2s;
+    }
+    .layout.sidebar-open .sidebar-shell {
+      transform: none;
+      visibility: visible;
+    }
+    .drawer-heading {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 52px;
+      padding: 0 8px 0 15px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .drawer-logo {
+      display: block;
+      width: 90px;
+      height: auto;
+    }
+    .drawer-repo {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-subtle);
+      border-left: 1px solid var(--border);
+      padding-left: 12px;
+      font-size: 13px;
+    }
+    .drawer-close {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      margin-left: auto;
+      flex: none;
+      padding: 0;
+      border: 0;
+      border-radius: 7px;
+      background: none;
+      color: var(--text-secondary);
+    }
+    .drawer-close:hover {
+      background: var(--surface-control);
+    }
+    .close-icon {
+      width: 18px;
+      height: 18px;
+      background: currentColor;
+      mask-position: center;
+      mask-size: contain;
+      mask-repeat: no-repeat;
+    }
+    .sidebar-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 25;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: var(--overlay);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .layout.sidebar-open .sidebar-backdrop {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    :global(html.sidebar-open) {
+      overflow: hidden;
+    }
     .content.empty-content {
-      min-height: calc(100dvh - 270px);
+      min-height: calc(100dvh - 52px);
     }
     .sidebar-resize {
       display: none;

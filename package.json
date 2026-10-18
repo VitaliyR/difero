@@ -22,7 +22,7 @@
     "prepare": "husky",
     "build": "vite build",
     "prepack": "pnpm run build",
-    "dev": "vite build --watch",
+    "dev": "node scripts/dev.mjs",
     "start": "node bin/difero.mjs",
     "test": "node --test",
     "test:browser": "pnpm exec playwright install chromium && pnpm run build && node --test tests/browser.smoke.mjs",

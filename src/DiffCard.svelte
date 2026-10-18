@@ -317,12 +317,12 @@
     color: var(--del);
   }
 
-  @media (max-width: 620px) {
+  @media (max-width: 760px) {
     .diff-card {
-      scroll-margin-top: 110px;
+      scroll-margin-top: 66px;
     }
     .diff-card-heading {
-      top: 110px;
+      top: 52px;
     }
   }
   .mode-change {
