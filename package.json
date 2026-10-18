@@ -1,0 +1,54 @@
+{
+  "name": "difero",
+  "version": "0.0.1",
+  "packageManager": "pnpm@12.11.2",
+  "description": "A fast local review UI for staged, unstaged, and untracked Git changes",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VitaliyR/difero.git"
+  },
+  "homepage": "https://github.com/VitaliyR/difero#readme",
+  "type": "module",
+  "bin": {
+    "difero": "./bin/difero.mjs"
+  },
+  "files": [
+    "bin",
+    "server",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prepare": "husky",
+    "build": "vite build",
+    "prepack": "pnpm run build",
+    "dev": "vite build --watch",
+    "start": "node bin/difero.mjs",
+    "test": "node --test",
+    "test:browser": "pnpm exec playwright install chromium && pnpm run build && node --test tests/browser.smoke.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm run lint && pnpm run format:check && pnpm run test && pnpm run build"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
+    "@eslint/js": "^10.0.1",
+    "@floating-ui/dom": "^1.8.0",
+    "@pierre/diffs": "^1.5.2",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "eslint": "^10.13.0",
+    "eslint-plugin-svelte": "^3.23.1",
+    "globals": "^17.13.0",
+    "husky": "^9.1.7",
+    "playwright": "^1.64.1",
+    "prettier": "^3.9.10",
+    "prettier-plugin-svelte": "^4.1.1",
+    "svelte": "^5.57.2",
+    "vite": "^7.1.0"
+  }
+}
