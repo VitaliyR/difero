@@ -1,0 +1,329 @@
+<script>
+  import { treeRows } from './review.js';
+  import folderIcon from './assets/folder.svg';
+  import plusIcon from './assets/plus.svg';
+  import { tooltip } from './tooltip.js';
+
+  let {
+    files,
+    comments,
+    activeFile,
+    search,
+    collapsedFolders,
+    onSearch,
+    onToggleFolder,
+    onNavigate,
+  } = $props();
+
+  let rows = $derived(treeRows(files, collapsedFolders, search));
+  let additions = $derived(files.reduce((total, file) => total + file.additions, 0));
+  let deletions = $derived(files.reduce((total, file) => total + file.deletions, 0));
+</script>
+
+<aside class="sidebar">
+  <div class="sidebar-heading">
+    <span>FILES</span>
+    <span id="file-count" class="file-count">{files.length}</span>
+  </div>
+  <div class="search-wrap">
+    <span aria-hidden="true">⌕</span>
+    <input
+      id="file-search"
+      type="search"
+      placeholder="Filter files"
+      aria-label="Filter files"
+      value={search}
+      oninput={(event) => onSearch(event.currentTarget.value)}
+    />
+  </div>
+  <div id="file-list" class="file-list">
+    {#each rows as row (row.kind + row.path)}
+      {#if row.kind === 'folder'}
+        <button
+          type="button"
+          class="folder-row"
+          style={`--depth:${row.depth}`}
+          {@attach tooltip(row.path)}
+          aria-expanded={!row.collapsed}
+          onclick={() => onToggleFolder(row.path)}
+        >
+          <span class="folder-chevron">{row.collapsed ? '▸' : '▾'}</span>
+          <span
+            class="folder-icon"
+            style={`mask-image:url('${folderIcon}')`}
+            aria-hidden="true"
+          ></span>
+          <span class="folder-name">{row.name}</span>
+          <span class="folder-count">{row.count}</span>
+        </button>
+      {:else}
+        {@const commentCount = comments.filter((comment) => comment.path === row.path).length}
+        <button
+          type="button"
+          class:active={activeFile === row.path}
+          class="file-row"
+          style={`--depth:${row.depth}`}
+          {@attach tooltip(row.file.oldPath ? `${row.file.oldPath} → ${row.path}` : row.path)}
+          data-path={row.path}
+          onclick={() => onNavigate(row.path)}
+        >
+          <span class={`status-dot ${row.file.status}`}>
+            {#if row.file.status === 'added'}
+              <span
+                class="plus-icon"
+                style={`mask-image:url('${plusIcon}')`}
+                aria-hidden="true"
+              ></span>
+            {:else if row.file.status === 'deleted'}−{:else if row.file.status === 'renamed'}→{:else}•{/if}
+          </span>
+          <span class="file-name">{row.name}</span>
+          {#if commentCount}<span class="comment-count">{commentCount}</span>{/if}
+        </button>
+      {/if}
+    {:else}
+      <div class="sidebar-empty">{files.length ? 'No matching files' : 'No changed files'}</div>
+    {/each}
+  </div>
+  <div id="sidebar-stats" class="sidebar-stats">
+    <h2>Diff stats</h2>
+    <div class="stat-row">
+      <span>Files</span>
+      <strong>{files.length}</strong>
+    </div>
+    <div class="stat-row">
+      <span>Additions</span>
+      <strong class="added">+{additions}</strong>
+    </div>
+    <div class="stat-row">
+      <span>Deletions</span>
+      <strong class="deleted">−{deletions}</strong>
+    </div>
+    <div class="stat-row">
+      <span>Lines</span>
+      <strong>{additions + deletions}</strong>
+    </div>
+  </div>
+</aside>
+
+<style>
+  .sidebar {
+    position: sticky;
+    top: 62px;
+    height: calc(100vh - 62px);
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    min-width: 0;
+  }
+  .sidebar-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 14px 10px;
+    color: var(--text-subtle);
+    font-size: 11px;
+    font-weight: 760;
+    letter-spacing: 1.2px;
+  }
+  .file-count {
+    background: var(--surface-control);
+    padding: 3px 7px;
+    border-radius: 5px;
+    letter-spacing: 0;
+    color: var(--text-muted);
+  }
+  .search-wrap {
+    margin: 0 9px 8px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-raised);
+    color: var(--text-subtle);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 9px;
+  }
+  .search-wrap span {
+    font-size: 22px;
+    line-height: 30px;
+  }
+  .search-wrap input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    background: none;
+    outline: none;
+    color: var(--text);
+    font-size: 12px;
+  }
+  .search-wrap input::placeholder {
+    color: var(--text-subtle);
+  }
+  .search-wrap input::-webkit-search-cancel-button {
+    filter: grayscale(1) brightness(3);
+  }
+  .file-list {
+    overflow: auto;
+    flex: 1;
+    padding: 2px 5px 10px;
+  }
+  .file-row,
+  .folder-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    border-radius: 5px;
+    background: none;
+    color: var(--text-secondary);
+    padding: 4px 8px 4px calc(8px + var(--depth) * 14px);
+    min-height: 29px;
+  }
+  .file-row:hover,
+  .folder-row:hover {
+    background: var(--surface-control);
+  }
+  .file-row.active {
+    background: var(--accent-bg);
+  }
+  .file-row {
+    padding-left: calc(12px + var(--depth) * 14px);
+  }
+  .folder-row {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .folder-chevron {
+    width: 11px;
+    flex: none;
+    color: var(--text-subtle);
+  }
+  .folder-icon {
+    color: var(--accent);
+    background: currentColor;
+    mask-position: center;
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    width: 16px;
+    height: 16px;
+    flex: none;
+  }
+  .folder-name,
+  .file-name {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .folder-count {
+    color: var(--text-subtle);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .status-dot {
+    width: 16px;
+    height: 16px;
+    display: grid;
+    place-items: center;
+    flex: none;
+    border-radius: 5px;
+    font-weight: 750;
+    font-size: 13px;
+  }
+  .status-dot.added {
+    background: var(--add-bg);
+    color: var(--add);
+  }
+  .status-dot .plus-icon {
+    display: block;
+    width: 11px;
+    height: 11px;
+    background: currentColor;
+    mask-position: center;
+    mask-size: contain;
+    mask-repeat: no-repeat;
+  }
+  .status-dot.deleted {
+    background: var(--del-bg);
+    color: var(--del);
+  }
+  .status-dot.modified {
+    background: var(--accent-bg);
+    color: var(--accent-text);
+  }
+  .status-dot.renamed {
+    background: var(--info-bg);
+    color: var(--info);
+  }
+  .file-name {
+    font-size: 12px;
+    font-weight: 610;
+  }
+  .comment-count {
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--text);
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+  .sidebar-empty {
+    padding: 15px 12px;
+    color: var(--text-subtle);
+    font-size: 12px;
+  }
+  .sidebar-stats {
+    border-top: 1px solid var(--border-subtle);
+    padding: 14px 16px 17px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .sidebar-stats h2 {
+    margin: 0 0 10px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+  }
+  .stat-row strong {
+    color: var(--text-secondary);
+    font-weight: 550;
+  }
+  .stat-row strong.added {
+    color: var(--add);
+  }
+  .stat-row strong.deleted {
+    color: var(--del);
+  }
+
+  @media (max-width: 620px) {
+    .sidebar-stats {
+      display: none;
+    }
+    .sidebar {
+      position: relative;
+      top: auto;
+      height: auto;
+      max-height: 210px;
+      border-right: 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .sidebar-heading {
+      padding: 10px 15px;
+    }
+    .search-wrap {
+      margin-bottom: 7px;
+    }
+    .file-list {
+      overflow: auto;
+      padding: 4px 8px;
+    }
+  }
+</style>
