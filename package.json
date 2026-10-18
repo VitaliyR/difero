@@ -1,6 +1,6 @@
 {
   "name": "difff",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "packageManager": "pnpm@12.11.2",
   "description": "A fast local review UI for staged, unstaged, and untracked Git changes",
   "repository": {
