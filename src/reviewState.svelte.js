@@ -1,24 +1,112 @@
 import { tick } from 'svelte';
-import { fileId, formatComments, LARGE_FILE_LINES, orderFiles, prepareFile } from './review.js';
+import {
+  diffKey,
+  estimatedHeight,
+  fileId,
+  formatComments,
+  isRenderable,
+  LARGE_FILE_LINES,
+  orderFiles,
+  parseContents,
+} from './review.js';
+import { primeHighlight } from './pierre.js';
+import { resetRenderBudget } from './renderScheduler.js';
+import { scrollToCard } from './scrollToCard.js';
+
+const NO_COMMENTS = [];
+const PRELOAD_MARGIN = 1500;
+const PRELOAD_TIMEOUT = 1500;
 
 const validModes = new Set(['all', 'staged', 'unstaged']);
 const initialMode = new URLSearchParams(window.location.search).get('mode');
 
 export class ReviewState {
   mode = $state(validModes.has(initialMode) ? initialMode : 'all');
+  loadedMode = $state(this.mode);
   root = $state('');
   files = $state.raw([]);
   comments = $state.raw([]);
   draft = $state.raw(null);
   loading = $state(false);
+  loaded = $state(false);
   activeFile = $state(null);
   search = $state('');
   collapsedFolders = $state.raw(new Set());
   collapsedFiles = $state.raw({});
   toastMessage = $state('');
   toastVisible = $state(false);
+  commentsByPath = $derived(groupByPath(this.comments, this.previousGroups));
+  previousGroups = new Map();
   request = 0;
+  snapshot = null;
+  expiredSnapshot = null;
+  navigation = null;
+  diffs = new Map();
   toastTimer;
+
+  commentsFor(path) {
+    return this.commentsByPath.get(path) ?? NO_COMMENTS;
+  }
+
+  draftFor(path) {
+    return this.draft?.path === path ? this.draft : null;
+  }
+
+  loadDiff(file, snapshot = this.snapshot) {
+    const key = diffKey(file);
+    let diff = this.diffs.get(key);
+    if (!diff) {
+      const params = new URLSearchParams({ snapshot, path: file.path });
+      diff = fetch(`/api/file?${params}`, { cache: 'no-store' })
+        .then(async (response) => {
+          if (response.status === 404 && snapshot === this.snapshot) {
+            this.reloadExpiredSnapshot(snapshot);
+            throw new Error('Snapshot expired');
+          }
+          if (!response.ok) throw new Error(await response.text());
+          return parseContents(file, await response.json());
+        })
+        .catch((error) => {
+          if (this.diffs.get(key) === diff) this.diffs.delete(key);
+          if (snapshot === this.snapshot && snapshot !== this.expiredSnapshot)
+            this.toast(`Could not load ${file.path}: ${error.message}`);
+          throw error;
+        });
+      this.diffs.set(key, diff);
+    }
+    return diff;
+  }
+
+  reloadExpiredSnapshot(snapshot) {
+    if (this.expiredSnapshot === snapshot) return;
+    this.expiredSnapshot = snapshot;
+    this.reload();
+  }
+
+  // Waits for the diffs that will be on screen so the new list doesn't flash empty cards.
+  async preloadDiffs(files, snapshot) {
+    const top = window.scrollY - PRELOAD_MARGIN;
+    const bottom = window.scrollY + window.innerHeight + PRELOAD_MARGIN;
+    const pending = [];
+    let offset = 0;
+    for (const file of files) {
+      if (offset > bottom) break;
+      const collapsed = this.isFileCollapsed(file);
+      const height = 64 + (collapsed || !isRenderable(file) ? 0 : estimatedHeight(file));
+      if (offset + height >= top && !collapsed && isRenderable(file)) {
+        pending.push(
+          this.loadDiff(file, snapshot)
+            .then(primeHighlight)
+            .catch(() => {}),
+        );
+      }
+      offset += height;
+    }
+    await Promise.race([
+      Promise.all(pending),
+      new Promise((resolve) => setTimeout(resolve, PRELOAD_TIMEOUT)),
+    ]);
+  }
 
   commentsKey() {
     return `difff:comments:${this.root}`;
@@ -82,14 +170,25 @@ export class ReviewState {
       }
       const parts = result.cwd.split(/[\\/]/).filter(Boolean);
       document.title = `Difff - ${parts.slice(-2).join('/')}`;
-      this.files = orderFiles(result.files.map(prepareFile));
+      const files = orderFiles(result.files);
+      const keys = new Set(files.map(diffKey));
+      for (const key of this.diffs.keys()) if (!keys.has(key)) this.diffs.delete(key);
+      await this.preloadDiffs(files, result.snapshot);
+      if (currentRequest !== this.request) return;
+      this.snapshot = result.snapshot;
+      this.loadedMode = result.mode;
+      this.files = files;
+      resetRenderBudget();
       this.activeFile = this.files[0]?.path || null;
       await tick();
       this.updateActiveFile();
     } catch (error) {
       if (currentRequest === this.request) this.toast(`Could not load diff: ${error.message}`);
     } finally {
-      if (currentRequest === this.request) this.loading = false;
+      if (currentRequest === this.request) {
+        this.loading = false;
+        this.loaded = true;
+      }
     }
   }
 
@@ -127,7 +226,17 @@ export class ReviewState {
     }
     this.collapsedFolders = expanded;
     await tick();
-    document.getElementById(fileId(path))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const card = document.getElementById(fileId(path));
+    if (!card) return;
+    this.navigation?.abort();
+    const navigation = (this.navigation = new AbortController());
+    const { signal } = navigation;
+    for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) {
+      window.addEventListener(type, () => navigation.abort(), { once: true, signal });
+    }
+    await scrollToCard(card, signal);
+    navigation.abort();
+    if (this.navigation === navigation) this.navigation = null;
   }
 
   moveFile(direction) {
@@ -138,23 +247,17 @@ export class ReviewState {
   }
 
   updateActiveFile() {
-    if (!this.files.length) return;
+    if (!this.files.length || this.navigation) return;
     const threshold = 87;
-    let visible = this.files.at(-1).path;
-    for (const file of this.files) {
-      const card = document.getElementById(fileId(file.path));
-      if (!card) continue;
-      const bounds = card.getBoundingClientRect();
-      if (bounds.top <= threshold && bounds.bottom > threshold) {
-        visible = file.path;
-        break;
-      }
-      if (bounds.top > threshold) {
-        visible = file.path;
-        break;
-      }
+    let low = 0;
+    let high = this.files.length - 1;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      const card = document.getElementById(fileId(this.files[middle].path));
+      if (card && card.getBoundingClientRect().bottom > threshold) high = middle;
+      else low = middle + 1;
     }
-    this.activeFile = visible;
+    this.activeFile = this.files[low].path;
   }
 
   toggleFolder(path) {
@@ -218,4 +321,23 @@ export class ReviewState {
   destroy() {
     clearTimeout(this.toastTimer);
   }
+}
+
+// Reuses unchanged arrays so only diffs whose comments changed re-render.
+function groupByPath(comments, previous) {
+  const groups = new Map();
+  for (const comment of comments) {
+    const group = groups.get(comment.path);
+    if (group) group.push(comment);
+    else groups.set(comment.path, [comment]);
+  }
+  for (const [path, group] of groups) {
+    const old = previous.get(path);
+    if (old?.length === group.length && old.every((item, index) => item === group[index])) {
+      groups.set(path, old);
+    }
+  }
+  previous.clear();
+  for (const [path, group] of groups) previous.set(path, group);
+  return groups;
 }

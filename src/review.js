@@ -2,31 +2,32 @@ import { parseDiffFromFile } from '@pierre/diffs';
 
 export const LARGE_FILE_LINES = 500;
 
-function lineCount(contents) {
-  if (contents === null || contents === '') return 0;
-  const lines = contents.split('\n').length;
-  return contents.endsWith('\n') ? lines - 1 : lines;
+export function hasSameContents(file) {
+  return file.oldHash !== null && file.oldHash === file.newHash;
 }
 
-export function prepareFile(file) {
-  const lines = Math.max(lineCount(file.oldFile), lineCount(file.newFile));
-  if (file.imageMime || file.binary || file.tooLarge)
-    return { ...file, lines, additions: 0, deletions: 0 };
-  const oldFile =
-    file.oldFile === null ? null : { name: file.oldPath || file.path, contents: file.oldFile };
-  const newFile = file.newFile === null ? null : { name: file.path, contents: file.newFile };
-  const metadata = parseDiffFromFile(oldFile, newFile);
-  let additions = 0;
-  let deletions = 0;
-  for (const hunk of metadata.hunks) {
-    for (const part of hunk.hunkContent) {
-      if (part.type === 'change') {
-        additions += part.additions;
-        deletions += part.deletions;
-      }
-    }
-  }
-  return { ...file, metadata, lines, additions, deletions };
+export function isRenderable(file) {
+  return !file.imageMime && !file.binary && !file.tooLarge && !hasSameContents(file);
+}
+
+export function diffKey(file) {
+  return `${file.oldPath}\0${file.path}\0${file.oldHash}\0${file.newHash}`;
+}
+
+export function estimatedHeight(file) {
+  return Math.min(file.lines, file.additions + file.deletions + 6) * 20 + 16;
+}
+
+export function parseContents(file, { oldFile, newFile }) {
+  const oldName = file.oldPath || file.path;
+  return parseDiffFromFile(
+    oldFile === null
+      ? null
+      : { name: oldName, contents: oldFile, cacheKey: `${oldName}:${file.oldHash}` },
+    newFile === null
+      ? null
+      : { name: file.path, contents: newFile, cacheKey: `${file.path}:${file.newHash}` },
+  );
 }
 
 export function fileId(path) {

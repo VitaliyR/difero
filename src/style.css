@@ -45,6 +45,9 @@
 * {
   box-sizing: border-box;
 }
+html {
+  overflow-anchor: none;
+}
 body {
   margin: 0;
 }

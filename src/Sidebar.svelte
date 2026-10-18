@@ -6,7 +6,8 @@
 
   let {
     files,
-    comments,
+    loaded,
+    commentsByPath,
     activeFile,
     search,
     collapsedFolders,
@@ -23,7 +24,9 @@
 <aside class="sidebar">
   <div class="sidebar-heading">
     <span>FILES</span>
-    <span id="file-count" class="file-count">{files.length}</span>
+    <span id="file-count" class="file-count" style:visibility={loaded ? null : 'hidden'}>
+      {files.length}
+    </span>
   </div>
   <div class="search-wrap">
     <span aria-hidden="true">⌕</span>
@@ -57,7 +60,7 @@
           <span class="folder-count">{row.count}</span>
         </button>
       {:else}
-        {@const commentCount = comments.filter((comment) => comment.path === row.path).length}
+        {@const commentCount = commentsByPath.get(row.path)?.length ?? 0}
         <button
           type="button"
           class:active={activeFile === row.path}
@@ -81,28 +84,32 @@
         </button>
       {/if}
     {:else}
-      <div class="sidebar-empty">{files.length ? 'No matching files' : 'No changed files'}</div>
+      {#if loaded}
+        <div class="sidebar-empty">{files.length ? 'No matching files' : 'No changed files'}</div>
+      {/if}
     {/each}
   </div>
-  <div id="sidebar-stats" class="sidebar-stats">
-    <h2>Diff stats</h2>
-    <div class="stat-row">
-      <span>Files</span>
-      <strong>{files.length}</strong>
+  {#if loaded}
+    <div id="sidebar-stats" class="sidebar-stats">
+      <h2>Diff stats</h2>
+      <div class="stat-row">
+        <span>Files</span>
+        <strong>{files.length}</strong>
+      </div>
+      <div class="stat-row">
+        <span>Additions</span>
+        <strong class="added">+{additions}</strong>
+      </div>
+      <div class="stat-row">
+        <span>Deletions</span>
+        <strong class="deleted">−{deletions}</strong>
+      </div>
+      <div class="stat-row">
+        <span>Lines</span>
+        <strong>{additions + deletions}</strong>
+      </div>
     </div>
-    <div class="stat-row">
-      <span>Additions</span>
-      <strong class="added">+{additions}</strong>
-    </div>
-    <div class="stat-row">
-      <span>Deletions</span>
-      <strong class="deleted">−{deletions}</strong>
-    </div>
-    <div class="stat-row">
-      <span>Lines</span>
-      <strong>{additions + deletions}</strong>
-    </div>
-  </div>
+  {/if}
 </aside>
 
 <style>

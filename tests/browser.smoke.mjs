@@ -355,3 +355,32 @@ test('browser review flow: tree, navigation, resize, comments, and shortcuts', a
   assert.ok(Math.abs(emptyOffset) < 1, `Empty state is ${emptyOffset}px off center`);
   assert.deepEqual(errors, []);
 });
+
+test('a review whose snapshot expired reloads instead of failing', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'difff-expired-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  git(root, 'init', '-q');
+  await writeFile(join(root, 'large.js'), 'const value = 1;\n'.repeat(501));
+
+  const { server, url } = await startServer({ cwd: root, assetsDir });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto(url);
+  const card = page.locator('.diff-card').filter({ hasText: 'large.js' });
+  await card.locator('.diff-card-toggle').waitFor();
+  assert.equal(await card.locator('.diff-card-toggle').getAttribute('aria-expanded'), 'false');
+
+  for (let index = 0; index < 5; index++) {
+    await page.request.get(new URL('/api/diff?mode=all', url).href);
+  }
+  const reloaded = page.waitForResponse((response) => response.url().includes('/api/diff'));
+  await card.locator('.diff-card-toggle').click();
+  await reloaded;
+  await card.locator('[data-line="501"]').first().waitFor();
+  assert.equal(await page.locator('#toast').innerText(), '');
+  assert.deepEqual(errors, []);
+});

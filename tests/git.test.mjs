@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -50,8 +50,13 @@ test('all, staged, and unstaged use the right snapshots and include untracked fi
       tooLarge: false,
       oldExists: true,
       newExists: true,
+      oldMode: '100644',
+      newMode: '100644',
       imageMime: null,
       untracked: false,
+      lines: 1,
+      additions: 1,
+      deletions: 1,
     },
   );
   assert.equal(staged.files.find((file) => file.path === 'new.txt').oldFile, null);
@@ -66,6 +71,8 @@ test('all, staged, and unstaged use the right snapshots and include untracked fi
   assert.equal(unstaged.files.find((file) => file.path === 'new.txt').oldFile, 'staged new\n');
   assert.equal(unstaged.files.find((file) => file.path === 'fresh.txt').untracked, true);
   assert.equal(unstaged.files.find((file) => file.path === 'removed.txt').newFile, null);
+  assert.equal(unstaged.files.find((file) => file.path === 'removed.txt').deletions, 1);
+  assert.equal(unstaged.files.find((file) => file.path === 'fresh.txt').additions, 1);
 
   const all = await getChanges(root, 'all');
   assert.equal(all.files.find((file) => file.path === 'changed.txt').oldFile, 'original\n');
@@ -95,6 +102,8 @@ test('tracked renames retain their original path in staged and all views', async
     assert.equal(files[0].path, 'after.txt');
     assert.equal(files[0].oldFile, 'same contents\n');
     assert.equal(files[0].newFile, 'same contents\n');
+    assert.equal(files[0].additions, 0);
+    assert.equal(files[0].deletions, 0);
   }
 });
 
@@ -153,4 +162,52 @@ test('an unborn repository shows staged and untracked additions', async (t) => {
     all.files.map((file) => file.path),
     ['staged.txt', 'untracked.txt'],
   );
+});
+
+test('a tracked file larger than the git output buffer is reported as too large', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'difff-huge-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.email', 'test@example.com');
+  git(root, 'config', 'user.name', 'Test');
+  git(root, 'config', 'commit.gpgsign', 'false');
+  await writeFile(join(root, 'huge.txt'), 'x'.repeat(33 * 1024 * 1024));
+  await writeFile(join(root, 'small.txt'), 'before\n');
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'initial');
+  await writeFile(join(root, 'huge.txt'), 'small now\n');
+  await writeFile(join(root, 'small.txt'), 'after\n');
+  git(root, 'add', '.');
+
+  for (const mode of ['all', 'staged']) {
+    const { files } = await getChanges(root, mode);
+    const huge = files.find((file) => file.path === 'huge.txt');
+    assert.equal(huge.tooLarge, true);
+    assert.equal(huge.oldFile, null);
+    assert.equal(files.find((file) => file.path === 'small.txt').newFile, 'after\n');
+  }
+});
+
+test('permission-only changes are listed with their file modes', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'difff-mode-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.email', 'test@example.com');
+  git(root, 'config', 'user.name', 'Test');
+  git(root, 'config', 'commit.gpgsign', 'false');
+  git(root, 'config', 'core.fileMode', 'true');
+  await writeFile(join(root, 'script.sh'), 'echo hi\n');
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'initial');
+  await chmod(join(root, 'script.sh'), 0o755);
+
+  for (const mode of ['all', 'unstaged']) {
+    const { files } = await getChanges(root, mode);
+    assert.equal(files.length, 1);
+    assert.equal(files[0].oldMode, '100644');
+    assert.equal(files[0].newMode, '100755');
+    assert.equal(files[0].additions, 0);
+    assert.equal(files[0].deletions, 0);
+  }
+  assert.equal((await getChanges(root, 'staged')).files.length, 0);
 });

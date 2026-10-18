@@ -1,11 +1,12 @@
 import { createServer } from 'node:http';
 import { serveAsset } from './assets.mjs';
 import { findRoot } from './git.mjs';
-import { serveDiff } from './routes/diff.mjs';
+import { createSnapshots, serveDiff, serveFile } from './routes/diff.mjs';
 import { serveImage } from './routes/image.mjs';
 
 export async function startServer({ cwd, assetsDir }) {
   const root = await findRoot(cwd);
+  const snapshots = createSnapshots();
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url, 'http://localhost');
@@ -14,7 +15,11 @@ export async function startServer({ cwd, assetsDir }) {
         return;
       }
       if (url.pathname === '/api/diff') {
-        await serveDiff(response, url, { root, cwd });
+        await serveDiff(response, url, { root, cwd, snapshots });
+        return;
+      }
+      if (url.pathname === '/api/file') {
+        serveFile(response, url, { snapshots });
         return;
       }
       if (url.pathname === '/api/image') {

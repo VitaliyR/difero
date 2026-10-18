@@ -110,7 +110,8 @@
   <div class="sidebar-shell" bind:this={sidebar}>
     <Sidebar
       files={review.files}
-      comments={review.comments}
+      loaded={review.loaded}
+      commentsByPath={review.commentsByPath}
       activeFile={review.activeFile}
       search={review.search}
       collapsedFolders={review.collapsedFolders}
@@ -134,35 +135,37 @@
     onpointercancel={() => document.body.classList.remove('resizing-sidebar')}
     onkeydown={resizeWithKeyboard}
   ></div>
-  <main id="content" class="content" class:empty-content={!review.files.length}>
-    {#if !review.files.length}
+  <main id="content" class="content" class:empty-content={review.loaded && !review.files.length}>
+    {#if review.files.length === 0 && review.loaded}
       <div class="empty-state">
         <img class="empty-logo" src="/logo.png" alt="Difff" />
         <h2>Nothing to review</h2>
         <p>
-          {review.mode === 'staged'
+          {review.loadedMode === 'staged'
             ? 'Stage some changes, then press R to reload.'
             : 'Make a change or add a new file, then press R to reload.'}
         </p>
       </div>
-    {:else}
+    {:else if review.files.length}
       <div class="content-intro">
         <h1>
-          {review.mode === 'all'
+          {review.loadedMode === 'all'
             ? 'All changes'
-            : review.mode === 'staged'
+            : review.loadedMode === 'staged'
               ? 'Staged changes'
               : 'Unstaged changes'}
         </h1>
         <p>{review.files.length} {review.files.length === 1 ? 'file' : 'files'}</p>
       </div>
-      {#each review.files as file (file.path)}
+      {#each review.files as file, index (file.path)}
         <DiffCard
           {file}
-          mode={review.mode}
+          order={index}
+          mode={review.loadedMode}
           collapsed={review.isFileCollapsed(file)}
-          comments={review.comments}
-          draft={review.draft}
+          comments={review.commentsFor(file.path)}
+          draft={review.draftFor(file.path)}
+          loadDiff={(file) => review.loadDiff(file)}
           onToggle={(file) => review.toggleFile(file)}
           onBegin={(path, line, side) => review.beginComment(path, line, side)}
           onCancel={() => (review.draft = null)}

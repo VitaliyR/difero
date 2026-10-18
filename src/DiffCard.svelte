@@ -1,14 +1,17 @@
 <script>
-  import { untrack } from 'svelte';
-  import { fileId } from './review.js';
-  import { annotationsFor, createDiff } from './pierre.js';
+  import { tick, untrack } from 'svelte';
+  import { estimatedHeight, fileId, hasSameContents, isRenderable } from './review.js';
+  import { createDiff } from './pierre.js';
+  import { scheduleRender } from './renderScheduler.js';
 
   let {
     file,
+    order,
     mode,
     collapsed,
     comments,
     draft,
+    loadDiff,
     onToggle,
     onBegin,
     onCancel,
@@ -21,16 +24,64 @@
     return `/api/image?${new URLSearchParams({ mode, path: file.path, side })}`;
   }
 
+  let card;
   let container = $state(null);
+  let metadata = $state.raw(null);
   let instance = $state.raw(null);
+
+  let placeholderHeight = $derived(estimatedHeight(file));
+  let modeChanged = $derived(
+    Boolean(file.oldMode && file.newMode && file.oldMode !== file.newMode),
+  );
+
+  let heightBefore = null;
+
+  // A card above the viewport changes height when it renders in the background; scroll
+  // by the difference so the content being read stays put.
+  $effect.pre(() => {
+    void metadata;
+    heightBefore = untrack(() => {
+      if (!card) return null;
+      const bounds = card.getBoundingClientRect();
+      const readingLine = parseFloat(getComputedStyle(card).scrollMarginTop) || 0;
+      return bounds.bottom <= readingLine ? bounds.height : null;
+    });
+  });
+
+  $effect(() => {
+    const source = file;
+    if (collapsed || !isRenderable(source)) {
+      metadata = null;
+      return;
+    }
+    let cancelled = false;
+    const cancel = scheduleRender(
+      card,
+      { order, weight: source.additions + source.deletions },
+      () =>
+        loadDiff(source).then(
+          (value) => {
+            if (cancelled) return;
+            metadata = value;
+            return tick();
+          },
+          () => {},
+        ),
+    );
+    return () => {
+      cancelled = true;
+      cancel();
+    };
+  });
 
   $effect(() => {
     const target = container;
-    const source = file;
-    if (!target || collapsed || source.imageMime || source.binary || source.tooLarge) return;
+    const value = metadata;
+    if (!target || !value) return;
     const diff = untrack(() =>
       createDiff({
-        file: source,
+        file,
+        metadata: value,
         container: target,
         getComments: () => comments,
         getDraft: () => draft,
@@ -42,6 +93,10 @@
       }),
     );
     instance = diff;
+    if (heightBefore !== null) {
+      window.scrollBy({ top: card.offsetHeight - heightBefore, behavior: 'instant' });
+      heightBefore = null;
+    }
     return () => {
       instance = null;
       diff.cleanUp();
@@ -49,16 +104,13 @@
   });
 
   $effect(() => {
-    const diff = instance;
     const currentComments = comments;
     const currentDraft = draft;
-    if (!diff) return;
-    diff.setLineAnnotations(annotationsFor(file.path, currentComments, currentDraft));
-    diff.rerender();
+    untrack(() => instance)?.setAnnotations(currentComments, currentDraft);
   });
 </script>
 
-<article id={fileId(file.path)} class="diff-card" class:collapsed>
+<article id={fileId(file.path)} class="diff-card" class:collapsed bind:this={card}>
   <div class="diff-card-heading">
     <button
       type="button"
@@ -81,6 +133,9 @@
     </button>
   </div>
   {#if !collapsed}
+    {#if modeChanged}
+      <div class="mode-change">File mode changed: {file.oldMode} → {file.newMode}</div>
+    {/if}
     {#if file.imageMime}
       <div class="image-previews" class:single-image={file.oldExists !== file.newExists}>
         {#if file.oldExists}
@@ -104,8 +159,16 @@
           ? 'Binary file — preview unavailable'
           : 'File is larger than 2 MB — preview unavailable'}
       </div>
+    {:else if hasSameContents(file)}
+      {#if !modeChanged}
+        <div class="unsupported-file">No content changes</div>
+      {/if}
     {:else}
-      <div class="pierre-container" bind:this={container}></div>
+      <div
+        class="pierre-container"
+        style:min-height={metadata ? null : `${placeholderHeight}px`}
+        bind:this={container}
+      ></div>
     {/if}
   {/if}
 </article>
@@ -261,6 +324,18 @@
     .diff-card-heading {
       top: 110px;
     }
+  }
+  .mode-change {
+    padding: 9px 14px;
+    color: var(--text-muted);
+    font:
+      12px ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      monospace;
+  }
+  .mode-change:not(:last-child) {
+    border-bottom: 1px solid var(--border);
   }
   .unsupported-file {
     padding: 34px;
