@@ -37,8 +37,11 @@ proxies `/api` to the difero server, which restarts on changes in `server/`
 without reopening the browser. Pass a path to review another repo:
 `pnpm dev ../other-repo`.
 
-The CLI binds to a free port on `127.0.0.1`, opens your browser, and stays
-running until Ctrl+C. Use `--no-open` if you want to open the URL yourself.
+The CLI binds to port 4747 on `127.0.0.1` (or the next free port if 4747 is
+taken), opens your browser, and stays running until Ctrl+C. A stable port keeps
+review comments, which are saved in the browser, across runs. Use `--port <n>`
+to pick a port (it fails if that port is taken) and `--no-open` if you want to
+open the URL yourself.
 
 Run `difero -h` or `difero --help` to see the available CLI options and version.
 

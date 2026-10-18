@@ -4,7 +4,7 @@ import { findRoot } from './git.mjs';
 import { createSnapshots, serveDiff, serveFile } from './routes/diff.mjs';
 import { serveImage } from './routes/image.mjs';
 
-export async function startServer({ cwd, assetsDir, port = 0 }) {
+export async function startServer({ cwd, assetsDir, port = 0, fallbackToFreePort = false }) {
   const root = await findRoot(cwd);
   const snapshots = createSnapshots();
   const server = createServer(async (request, response) => {
@@ -34,9 +34,32 @@ export async function startServer({ cwd, assetsDir, port = 0 }) {
       response.end(error.code === 'ENOENT' ? 'Not found' : error.message);
     }
   });
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, '127.0.0.1', resolve);
-  });
+  await listenWithFallback(server, port, fallbackToFreePort);
   return { server, root, url: `http://127.0.0.1:${server.address().port}/` };
+}
+
+const FALLBACK_PORT_ATTEMPTS = 200;
+
+async function listenWithFallback(server, port, fallbackToFreePort) {
+  const lastPort = fallbackToFreePort ? Math.min(port + FALLBACK_PORT_ATTEMPTS, 65535) : port;
+  for (let candidate = port; candidate <= lastPort; candidate++) {
+    try {
+      await listen(server, candidate);
+      return;
+    } catch (error) {
+      if (!fallbackToFreePort || error.code !== 'EADDRINUSE') throw error;
+    }
+  }
+  await listen(server, 0);
+}
+
+function listen(server, port) {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => reject(error);
+    server.once('error', onError);
+    server.listen(port, '127.0.0.1', () => {
+      server.off('error', onError);
+      resolve();
+    });
+  });
 }

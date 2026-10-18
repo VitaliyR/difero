@@ -304,6 +304,7 @@
   .pierre-container {
     --diffs-gap-block: 0px;
     min-width: 0;
+    overflow: auto;
   }
   .pierre-container :global([slot='gutter-utility-slot']) {
     z-index: 5;
