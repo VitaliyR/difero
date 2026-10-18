@@ -6,6 +6,7 @@ export async function serveImage(response, url, { root }) {
     url.searchParams.get('mode'),
     url.searchParams.get('path'),
     url.searchParams.get('side'),
+    url.searchParams.get('base'),
   );
   if (!image) {
     response.writeHead(404).end('Image not found');

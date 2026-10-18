@@ -5,9 +5,10 @@
   let { open = $bindable(false) } = $props();
   let dialog;
   const shortcuts = [
-    ['All changes', '1'],
+    ['Working changes', '1'],
     ['Staged changes', '2'],
     ['Unstaged changes', '3'],
+    ['Base branch changes', '4'],
     ['Next file', 'J'],
     ['Previous file', 'K'],
     ['Reload changes', 'R'],

@@ -1,12 +1,25 @@
 <script>
   import { tooltip } from './tooltip.js';
 
-  let { root, mode, loading, commentCount, onModeChange, onReload, onCopy, onHelp } = $props();
+  let {
+    root,
+    mode,
+    base,
+    branches,
+    loading,
+    commentCount,
+    onModeChange,
+    onBaseChange,
+    onReload,
+    onCopy,
+    onHelp,
+  } = $props();
 
   const modes = [
-    { id: 'all', label: 'All', key: '1' },
+    { id: 'all', label: 'Working', key: '1' },
     { id: 'staged', label: 'Staged', key: '2' },
     { id: 'unstaged', label: 'Unstaged', key: '3' },
+    { id: 'base', label: 'Base', key: '4' },
   ];
   let repoName = $derived(root.split('/').at(-1));
 </script>
@@ -35,6 +48,18 @@
       </button>
     {/each}
   </nav>
+  {#if mode === 'base' && branches.length}
+    <span class="base-picker">
+      <select
+        class="base-select"
+        aria-label="Base branch"
+        value={base}
+        onchange={(event) => onBaseChange(event.currentTarget.value)}
+      >
+        {#each branches as branch (branch)}<option value={branch}>{branch}</option>{/each}
+      </select>
+    </span>
+  {/if}
   <div class="top-actions">
     <button
       type="button"
@@ -152,6 +177,35 @@
     align-items: center;
     gap: 10px;
   }
+  .base-picker {
+    position: relative;
+    display: inline-flex;
+    max-width: 180px;
+    margin-left: -18px;
+  }
+  .base-picker::after {
+    content: '';
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid var(--text);
+    border-bottom: 1.5px solid var(--text);
+    transform: translateY(-70%) rotate(45deg);
+    pointer-events: none;
+  }
+  .base-select {
+    appearance: none;
+    field-sizing: content;
+    min-width: 120px;
+    max-width: 180px;
+    padding: 7px 34px 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-control);
+    color: var(--text);
+  }
   .icon-button {
     display: grid;
     place-items: center;
@@ -214,6 +268,9 @@
     .topbar {
       gap: 10px;
       padding: 0 12px;
+    }
+    .base-picker {
+      margin-left: 0;
     }
     .brand {
       min-width: 0;

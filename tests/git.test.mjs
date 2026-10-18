@@ -80,6 +80,39 @@ test('all, staged, and unstaged use the right snapshots and include untracked fi
   assert.equal(all.files.find((file) => file.path === 'fresh.txt').oldFile, null);
 });
 
+test('base view includes committed and working changes from the selected parent branch', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'difd-base-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.email', 'test@example.com');
+  git(root, 'config', 'user.name', 'Test');
+  git(root, 'config', 'commit.gpgsign', 'false');
+  await writeFile(join(root, 'file.txt'), 'main\n');
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'initial');
+  git(root, 'branch', '-M', 'main');
+  assert.deepEqual((await getChanges(root, 'base')).files, []);
+  git(root, 'switch', '-qc', 'parent');
+  await writeFile(join(root, 'file.txt'), 'parent\n');
+  git(root, 'commit', '-qam', 'parent change');
+  git(root, 'switch', '-qc', 'feature');
+  await writeFile(join(root, 'file.txt'), 'feature commit\n');
+  git(root, 'commit', '-qam', 'feature change');
+  await writeFile(join(root, 'file.txt'), 'working\n');
+  await writeFile(join(root, 'new.txt'), 'untracked\n');
+
+  const working = await getChanges(root, 'all');
+  assert.equal(working.files.find((file) => file.path === 'file.txt').oldFile, 'feature commit\n');
+  const parent = await getChanges(root, 'base', 'parent');
+  assert.equal(parent.base, 'parent');
+  assert.equal(parent.files.find((file) => file.path === 'file.txt').oldFile, 'parent\n');
+  assert.equal(parent.files.find((file) => file.path === 'file.txt').newFile, 'working\n');
+  assert.equal(parent.files.find((file) => file.path === 'new.txt').untracked, true);
+  const main = await getChanges(root, 'base', 'main');
+  assert.equal(main.files.find((file) => file.path === 'file.txt').oldFile, 'main\n');
+  await assert.rejects(getChanges(root, 'base', 'not-a-branch'), /Choose an available base branch/);
+});
+
 test('tracked renames retain their original path in staged and all views', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'difero-renames-'));
   t.after(() => rm(root, { recursive: true, force: true }));

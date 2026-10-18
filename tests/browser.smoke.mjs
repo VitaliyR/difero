@@ -14,6 +14,66 @@ function git(root, ...args) {
   execFileSync('git', ['-C', root, ...args], { stdio: 'pipe' });
 }
 
+test('long diff lines remain horizontally scrollable', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'difero-browser-scroll-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.email', 'test@example.com');
+  git(root, 'config', 'user.name', 'Test');
+  git(root, 'config', 'commit.gpgsign', 'false');
+  await writeFile(join(root, 'long.txt'), `${'a'.repeat(600)}\n`);
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'initial');
+  await writeFile(join(root, 'long.txt'), `${'b'.repeat(600)}\n`);
+
+  const { server, url } = await startServer({ cwd: root, assetsDir });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
+  await page.goto(url);
+  await page.locator('.pierre-container [data-code]').waitFor();
+  const scroll = await page.locator('.pierre-container [data-code]').evaluate((code) => {
+    const width = code.scrollWidth - code.clientWidth;
+    code.scrollLeft = 100;
+    return { width, left: code.scrollLeft };
+  });
+  assert.ok(scroll.width > 100);
+  assert.ok(scroll.left > 0);
+});
+
+test('base branch selector reviews committed changes against a chosen branch', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'difd-browser-base-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.email', 'test@example.com');
+  git(root, 'config', 'user.name', 'Test');
+  git(root, 'config', 'commit.gpgsign', 'false');
+  await writeFile(join(root, 'file.txt'), 'main\n');
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'initial');
+  git(root, 'branch', '-M', 'main');
+  git(root, 'switch', '-qc', 'parent');
+  await writeFile(join(root, 'file.txt'), 'parent\n');
+  git(root, 'commit', '-qam', 'parent');
+  git(root, 'switch', '-qc', 'feature');
+  await writeFile(join(root, 'file.txt'), 'feature\n');
+  git(root, 'commit', '-qam', 'feature');
+
+  const { server, url } = await startServer({ cwd: root, assetsDir });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(url);
+  await page.getByRole('button', { name: 'Base 4' }).click();
+  await page.getByRole('heading', { name: 'Changes since main' }).waitFor();
+  await page.getByRole('combobox', { name: 'Base branch' }).selectOption('parent');
+  await page.getByRole('heading', { name: 'Changes since parent' }).waitFor();
+  assert.equal(new URL(page.url()).searchParams.get('base'), 'parent');
+  assert.equal(await page.locator('.diff-card').count(), 1);
+});
+
 test('browser review flow: tree, navigation, resize, comments, and shortcuts', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'difero-browser-'));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -41,7 +101,7 @@ test('browser review flow: tree, navigation, resize, comments, and shortcuts', a
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(url);
-  await page.getByRole('heading', { name: 'All changes' }).waitFor();
+  await page.getByRole('heading', { name: 'Working changes' }).waitFor();
   const logo = page.locator('.brand-logo');
   assert.equal(await logo.getAttribute('alt'), 'Difero');
   assert.equal(await logo.evaluate((node) => node.naturalWidth), 1500);

@@ -78,6 +78,7 @@
     if (event.key === '1') review.setMode('all');
     if (event.key === '2') review.setMode('staged');
     if (event.key === '3') review.setMode('unstaged');
+    if (event.key === '4') review.setMode('base');
     if (event.key.toLowerCase() === 'r') review.reload();
     if (event.key.toLowerCase() === 'j') review.moveFile(1);
     if (event.key.toLowerCase() === 'k') review.moveFile(-1);
@@ -98,9 +99,12 @@
 <Topbar
   root={review.root}
   mode={review.mode}
+  base={review.base}
+  branches={review.branches}
   loading={review.loading}
   commentCount={review.comments.length}
   onModeChange={(mode) => review.setMode(mode)}
+  onBaseChange={(base) => review.setBase(base)}
   onReload={() => review.reload()}
   onCopy={(options) => review.copyComments(options)}
   onHelp={() => (shortcutsOpen = true)}
@@ -143,17 +147,23 @@
         <p>
           {review.loadedMode === 'staged'
             ? 'Stage some changes, then press R to reload.'
-            : 'Make a change or add a new file, then press R to reload.'}
+            : review.loadedMode === 'base'
+              ? review.loadedBase
+                ? `No changes since branching from ${review.loadedBase}.`
+                : 'No other branch is available. Create a branch to compare against.'
+              : 'Make a change or add a new file, then press R to reload.'}
         </p>
       </div>
     {:else if review.files.length}
       <div class="content-intro">
         <h1>
           {review.loadedMode === 'all'
-            ? 'All changes'
+            ? 'Working changes'
             : review.loadedMode === 'staged'
               ? 'Staged changes'
-              : 'Unstaged changes'}
+              : review.loadedMode === 'base'
+                ? `Changes since ${review.loadedBase}`
+                : 'Unstaged changes'}
         </h1>
         <p>{review.files.length} {review.files.length === 1 ? 'file' : 'files'}</p>
       </div>
@@ -162,6 +172,7 @@
           {file}
           order={index}
           mode={review.loadedMode}
+          base={review.loadedBase}
           collapsed={review.isFileCollapsed(file)}
           comments={review.commentsFor(file.path)}
           draft={review.draftFor(file.path)}

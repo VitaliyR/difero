@@ -38,6 +38,47 @@ export async function findRoot(cwd) {
   return root.trim();
 }
 
+export async function getBaseBranches(root) {
+  const output = await git(
+    root,
+    ['for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/remotes'],
+    {
+      encoding: 'utf8',
+    },
+  );
+  const current = (await git(root, ['branch', '--show-current'], { encoding: 'utf8' })).trim();
+  const branches = output
+    .split('\n')
+    .filter((name) => name && !name.endsWith('/HEAD') && name !== current);
+  const remoteHead = await git(
+    root,
+    ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
+    {
+      encoding: 'utf8',
+      allowMissing: true,
+    },
+  );
+  const suggested =
+    [remoteHead?.trim(), 'main', 'origin/main', 'master', 'origin/master'].find((name) =>
+      branches.includes(name),
+    ) ??
+    branches[0] ??
+    null;
+  return { branches, suggested };
+}
+
+async function baseCommit(root, base, available = null) {
+  const { branches, suggested } = available ?? (await getBaseBranches(root));
+  const selected = base || suggested;
+  if (!selected || !branches.includes(selected)) throw new Error('Choose an available base branch');
+  const commit = await git(root, ['merge-base', selected, 'HEAD'], {
+    encoding: 'utf8',
+    allowMissing: true,
+  });
+  if (!commit) throw new Error(`No common ancestor with ${selected}`);
+  return { base: selected, commit: commit.trim(), branches };
+}
+
 function paths(buffer) {
   return buffer.toString('utf8').split('\0').filter(Boolean);
 }
@@ -151,14 +192,14 @@ function numstatEntries(buffer) {
   return stats;
 }
 
-async function changeStats(root, mode) {
+async function changeStats(root, mode, comparison) {
   const args = ['--numstat', '-z', '-M', '--no-ext-diff'];
   const value =
     mode === 'staged'
       ? await git(root, ['diff', '--cached', ...args])
       : mode === 'unstaged'
         ? await git(root, ['diff', ...args])
-        : await git(root, ['diff', 'HEAD', ...args], { allowMissing: true });
+        : await git(root, ['diff', comparison ?? 'HEAD', ...args], { allowMissing: true });
   return numstatEntries(value);
 }
 
@@ -176,13 +217,13 @@ async function mapLimit(items, limit, fn) {
   return results;
 }
 
-async function changedPaths(root, mode) {
+async function changedPaths(root, mode, comparison) {
   const args = ['--raw', '-z', '-M', '--no-abbrev', '--no-ext-diff'];
   const [staged, unstaged, all, untracked] = await Promise.all([
     git(root, ['diff', '--cached', ...args]),
     git(root, ['diff', ...args]),
-    mode === 'all'
-      ? git(root, ['diff', 'HEAD', ...args], { allowMissing: true })
+    mode === 'all' || mode === 'base'
+      ? git(root, ['diff', comparison ?? 'HEAD', ...args], { allowMissing: true })
       : Promise.resolve(null),
     git(root, ['ls-files', '--others', '--exclude-standard', '-z']),
   ]);
@@ -220,11 +261,17 @@ async function changedPaths(root, mode) {
   };
 }
 
-export async function getChanges(root, mode = 'all') {
-  if (!['all', 'staged', 'unstaged'].includes(mode)) throw new Error('Invalid diff mode');
+export async function getChanges(root, mode = 'all', base = null) {
+  if (!['all', 'base', 'staged', 'unstaged'].includes(mode)) throw new Error('Invalid diff mode');
+  const available = mode === 'base' ? await getBaseBranches(root) : null;
+  if (available && !available.branches.length) {
+    return { root, mode, base: null, branches: [], files: [] };
+  }
+  const baseInfo = mode === 'base' ? await baseCommit(root, base, available) : null;
+  const comparison = baseInfo?.commit;
   const [{ entries, untrackedPaths }, stats] = await Promise.all([
-    changedPaths(root, mode),
-    changeStats(root, mode),
+    changedPaths(root, mode, comparison),
+    changeStats(root, mode, comparison),
   ]);
   const sizes = await blobSizes(
     root,
@@ -294,14 +341,26 @@ export async function getChanges(root, mode = 'all') {
       };
     },
   );
-  return { root, mode, files: files.filter(Boolean) };
+  return {
+    root,
+    mode,
+    base: baseInfo?.base ?? null,
+    branches: baseInfo?.branches ?? null,
+    files: files.filter(Boolean),
+  };
 }
 
-export async function getImage(root, mode, path, side) {
-  if (!['all', 'staged', 'unstaged'].includes(mode) || !['old', 'new'].includes(side)) return null;
+export async function getImage(root, mode, path, side, base = null) {
+  if (!['all', 'base', 'staged', 'unstaged'].includes(mode) || !['old', 'new'].includes(side))
+    return null;
   const mime = typeof path === 'string' ? IMAGE_MIME[extname(path).toLowerCase()] : null;
-  const entry = (await changedPaths(root, mode)).entries.find((item) => item.path === path);
-  if (!mime || !entry) return null;
+  if (!mime) return null;
+  if (mode === 'base' && !(await getBaseBranches(root)).branches.length) return null;
+  const comparison = mode === 'base' ? (await baseCommit(root, base)).commit : null;
+  const entry = (await changedPaths(root, mode, comparison)).entries.find(
+    (item) => item.path === path,
+  );
+  if (!entry) return null;
   const blob = side === 'old' ? entry.oldBlob : entry.newBlob;
   const value =
     side === 'new' && mode !== 'staged'

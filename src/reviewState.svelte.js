@@ -17,11 +17,15 @@ const NO_COMMENTS = [];
 const PRELOAD_MARGIN = 1500;
 const PRELOAD_TIMEOUT = 1500;
 
-const validModes = new Set(['all', 'staged', 'unstaged']);
+const validModes = new Set(['all', 'base', 'staged', 'unstaged']);
 const initialMode = new URLSearchParams(window.location.search).get('mode');
+const initialBase = new URLSearchParams(window.location.search).get('base');
 
 export class ReviewState {
   mode = $state(validModes.has(initialMode) ? initialMode : 'all');
+  base = $state(initialBase || '');
+  loadedBase = $state('');
+  branches = $state.raw([]);
   loadedMode = $state(this.mode);
   root = $state('');
   files = $state.raw([]);
@@ -158,7 +162,9 @@ export class ReviewState {
     const currentRequest = ++this.request;
     this.loading = true;
     try {
-      const response = await fetch(`/api/diff?mode=${this.mode}`, { cache: 'no-store' });
+      const params = new URLSearchParams({ mode: this.mode });
+      if (this.mode === 'base' && this.base) params.set('base', this.base);
+      const response = await fetch(`/api/diff?${params}`, { cache: 'no-store' });
       if (!response.ok) throw new Error(await response.text());
       const result = await response.json();
       if (currentRequest !== this.request) return;
@@ -177,6 +183,9 @@ export class ReviewState {
       if (currentRequest !== this.request) return;
       this.snapshot = result.snapshot;
       this.loadedMode = result.mode;
+      this.loadedBase = result.base || '';
+      this.branches = result.branches || [];
+      if (result.mode === 'base') this.base = result.base || '';
       this.files = files;
       resetRenderBudget();
       this.activeFile = this.files[0]?.path || null;
@@ -197,6 +206,16 @@ export class ReviewState {
     this.mode = nextMode;
     const url = new URL(window.location.href);
     url.searchParams.set('mode', nextMode);
+    history.replaceState(null, '', url);
+    this.draft = null;
+    this.reload();
+  }
+
+  setBase(base) {
+    if (this.base === base) return;
+    this.base = base;
+    const url = new URL(window.location.href);
+    url.searchParams.set('base', base);
     history.replaceState(null, '', url);
     this.draft = null;
     this.reload();

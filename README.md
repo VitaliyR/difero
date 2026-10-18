@@ -39,17 +39,23 @@ Run `difero -h` or `difero --help` to see the available CLI options and version.
 
 ## Review workflow
 
-| Key     | View                                                       |
-| ------- | ---------------------------------------------------------- |
-| `1`     | All: `HEAD` to working tree, including untracked files     |
-| `2`     | Staged: `HEAD` to index                                    |
-| `3`     | Unstaged: index to working tree, including untracked files |
-| `R`     | Reload changes                                             |
-| `J`     | Go to next file                                            |
-| `K`     | Go to previous file                                        |
-| `C`     | Copy comments without clearing                             |
-| `Alt+C` | Copy and clear comments                                    |
-| `?`     | Show all shortcuts                                         |
+| Key     | View                                                        |
+| ------- | ----------------------------------------------------------- |
+| `1`     | Working: `HEAD` to working tree, including untracked files  |
+| `2`     | Staged: `HEAD` to index                                     |
+| `3`     | Unstaged: index to working tree, including untracked files  |
+| `4`     | Base: merge base to working tree, including untracked files |
+| `R`     | Reload changes                                              |
+| `J`     | Go to next file                                             |
+| `K`     | Go to previous file                                         |
+| `C`     | Copy comments without clearing                              |
+| `Alt+C` | Copy and clear comments                                     |
+| `?`     | Show all shortcuts                                          |
+
+Base suggests the remote default branch, then `main` or `master`. Select another
+branch from the menu when working on a branch based on a feature branch. Git
+does not record a branch's original parent, so the selected branch is the source
+of truth for this comparison.
 
 Click the `+` beside a diff line or its line number to comment on either side.
 Save with `⌘/Ctrl+Enter`. Use the pencil button to edit a comment.

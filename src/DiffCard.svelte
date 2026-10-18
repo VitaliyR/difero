@@ -8,6 +8,7 @@
     file,
     order,
     mode,
+    base,
     collapsed,
     comments,
     draft,
@@ -21,7 +22,7 @@
   } = $props();
 
   function imageUrl(side) {
-    return `/api/image?${new URLSearchParams({ mode, path: file.path, side })}`;
+    return `/api/image?${new URLSearchParams({ mode, path: file.path, side, ...(base ? { base } : {}) })}`;
   }
 
   let card;
@@ -303,7 +304,6 @@
   .pierre-container {
     --diffs-gap-block: 0px;
     min-width: 0;
-    overflow: auto;
   }
   .pierre-container :global([slot='gutter-utility-slot']) {
     z-index: 5;

@@ -13,11 +13,11 @@ export function createSnapshots() {
 
 export async function serveDiff(response, url, { root, cwd, snapshots }) {
   const mode = url.searchParams.get('mode') || 'all';
-  if (!['all', 'staged', 'unstaged'].includes(mode)) {
+  if (!['all', 'base', 'staged', 'unstaged'].includes(mode)) {
     response.writeHead(400).end('Invalid mode');
     return;
   }
-  const data = await getChanges(root, mode);
+  const data = await getChanges(root, mode, url.searchParams.get('base'));
   const snapshot = randomUUID();
   const contents = new Map();
   const files = data.files.map((file) => {
