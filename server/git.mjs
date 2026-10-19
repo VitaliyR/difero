@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { readFile, lstat, readlink } from 'node:fs/promises';
+import { readFile, readdir, lstat, readlink, stat } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -36,6 +36,53 @@ async function git(root, args, options = {}) {
 export async function findRoot(cwd) {
   const root = await git(cwd, ['rev-parse', '--show-toplevel'], { encoding: 'utf8' });
   return root.trim();
+}
+
+const SKIPPED_DIRS = new Set(['node_modules']);
+
+function isRepoName(name) {
+  return Boolean(name) && !/[\\/]/.test(name) && !name.startsWith('.') && !SKIPPED_DIRS.has(name);
+}
+
+// A repository directly inside dir, or null. A .git file marks worktrees and submodules.
+export async function findRepo(dir, name) {
+  if (!isRepoName(name)) return null;
+  const path = join(dir, name);
+  try {
+    await stat(join(path, '.git'));
+  } catch {
+    return null;
+  }
+  const gitDir = await git(path, ['rev-parse', '--git-dir'], {
+    encoding: 'utf8',
+    allowMissing: true,
+  }).catch(() => null);
+  return gitDir ? { name, path } : null;
+}
+
+// Repositories directly inside a folder that is not a repository itself.
+export async function findRepos(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const candidates = entries.filter(
+    (entry) => (entry.isDirectory() || entry.isSymbolicLink()) && isRepoName(entry.name),
+  );
+  const repos = await mapLimit(candidates, 8, ({ name }) => findRepo(dir, name));
+  return repos.filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function countChanges(root) {
+  const output = await git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], {
+    encoding: 'utf8',
+  });
+  const fields = output.split('\0');
+  let count = 0;
+  for (let index = 0; index < fields.length; index++) {
+    if (!fields[index]) continue;
+    count++;
+    // Renames and copies are followed by their original path.
+    if (/^[RC]/.test(fields[index])) index++;
+  }
+  return count;
 }
 
 export async function getBaseBranches(root) {

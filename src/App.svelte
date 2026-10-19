@@ -22,7 +22,7 @@
   onMount(() => {
     const savedWidth = Number(sessionStorage.getItem(SIDEBAR_KEY));
     if (savedWidth >= 190 && savedWidth <= 560) setSidebarWidth(savedWidth);
-    review.reload();
+    review.start();
     return () => review.destroy();
   });
 
@@ -146,6 +146,13 @@
       </button>
     </div>
     <Sidebar
+      workspace={review.workspace}
+      repos={review.repos}
+      repo={review.repo}
+      onSelectRepo={(name) => {
+        sidebarOpen = false;
+        review.setRepo(name);
+      }}
       files={review.files}
       loaded={review.loaded}
       commentsByPath={review.commentsByPath}
@@ -186,15 +193,17 @@
     {#if review.files.length === 0 && review.loaded}
       <div class="empty-state">
         <img class="empty-logo" src="/logo.png" alt="Difero" />
-        <h2>Nothing to review</h2>
+        <h2>{review.workspace && !review.repo ? 'No repositories' : 'Nothing to review'}</h2>
         <p>
-          {review.loadedMode === 'staged'
-            ? 'Stage some changes, then press R to reload.'
-            : review.loadedMode === 'base'
-              ? review.loadedBase
-                ? `No changes since branching from ${review.loadedBase}.`
-                : 'No other branch is available. Create a branch to compare against.'
-              : 'Make a change or add a new file, then press R to reload.'}
+          {review.workspace && !review.repo
+            ? 'Add a Git repository to this folder, then press R to reload.'
+            : review.loadedMode === 'staged'
+              ? 'Stage some changes, then press R to reload.'
+              : review.loadedMode === 'base'
+                ? review.loadedBase
+                  ? `No changes since branching from ${review.loadedBase}.`
+                  : 'No other branch is available. Create a branch to compare against.'
+                : 'Make a change or add a new file, then press R to reload.'}
         </p>
       </div>
     {:else if review.files.length}
@@ -216,6 +225,7 @@
           order={index}
           mode={review.loadedMode}
           base={review.loadedBase}
+          repo={review.loadedRepo}
           collapsed={review.isFileCollapsed(file)}
           comments={review.commentsFor(file.path)}
           draft={review.draftFor(file.path)}

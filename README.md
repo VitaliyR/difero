@@ -24,6 +24,12 @@ npx difero
 # or: pnpm dlx difero
 ```
 
+Run it from a folder that is not a repository itself but holds several, such as
+`theapp/` with `app/`, `api/`, and `web/` inside, and the sidebar lists those
+repositories. Pick one to review it as if difero had been started there. Each
+repository keeps its own comments, and the number beside it is how many files it
+has changed. Only direct subfolders are checked.
+
 When developing this checkout:
 
 ```sh

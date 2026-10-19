@@ -67,7 +67,7 @@ if (args.includes('-h') || args.includes('--help')) {
 } else {
   try {
     const port = parsePort();
-    const { server, url, root } = await startServer({
+    const { server, url, root, repos } = await startServer({
       cwd: resolve(process.cwd()),
       assetsDir,
       port: port ?? DEFAULT_PORT,
@@ -75,7 +75,10 @@ if (args.includes('-h') || args.includes('--help')) {
     });
     const header = `difero v${version}  `;
     const indent = ' '.repeat(header.length);
-    console.log(`${header}${root}\n${indent}${url}\n${indent}Press Ctrl+C to stop.`);
+    const location = repos
+      ? `${root}  (${repos.length} ${repos.length === 1 ? 'repository' : 'repositories'})`
+      : root;
+    console.log(`${header}${location}\n${indent}${url}\n${indent}Press Ctrl+C to stop.`);
     if (isRemoteSession()) {
       const { port } = server.address();
       const ssh = `ssh -L ${port}:127.0.0.1:${port} <host>`;

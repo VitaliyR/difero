@@ -250,3 +250,54 @@ test(
     assert.ok(!result.output().includes('ssh -L'));
   },
 );
+
+test('a folder of repositories serves each one by name', async (t) => {
+  const parent = await mkdtemp(join(tmpdir(), 'difero-workspace-'));
+  t.after(() => rm(parent, { recursive: true, force: true }));
+  for (const name of ['api', 'web']) execFileSync('git', ['init', '-q', join(parent, name)]);
+  await writeFile(join(parent, 'web', 'page.html'), '<p>hi</p>\n');
+
+  const { server, root, repos } = await startServer({ cwd: parent, assetsDir: parent });
+  t.after(() => server.close());
+  assert.equal(root, parent);
+  assert.deepEqual(
+    repos.map(({ name }) => name),
+    ['api', 'web'],
+  );
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const listing = await (await fetch(`${base}/api/repos`)).json();
+  assert.equal(listing.workspace, parent);
+  assert.deepEqual(
+    listing.repos.map(({ name, changes }) => [name, changes]),
+    [
+      ['api', 0],
+      ['web', 1],
+    ],
+  );
+  const diff = await (await fetch(`${base}/api/diff?mode=all&repo=web`)).json();
+  assert.deepEqual(
+    diff.files.map(({ path }) => path),
+    ['page.html'],
+  );
+  for (const repo of ['', '..', 'missing']) {
+    const response = await fetch(`${base}/api/diff?mode=all&repo=${repo}`);
+    assert.equal(response.status, 400);
+  }
+});
+
+test('a repository is served directly, without the repository list', async (t) => {
+  const root = await makeRepo(t);
+  execFileSync('git', ['init', '-q', join(root, 'nested')]);
+  const { server, repos } = await startServer({ cwd: root, assetsDir: root });
+  t.after(() => server.close());
+  assert.equal(repos, null);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  assert.deepEqual(await (await fetch(`${base}/api/repos`)).json(), { workspace: null, repos: [] });
+});
+
+test('a folder without repositories fails to start', async (t) => {
+  const parent = await mkdtemp(join(tmpdir(), 'difero-empty-'));
+  t.after(() => rm(parent, { recursive: true, force: true }));
+  await mkdir(join(parent, 'plain'));
+  await assert.rejects(startServer({ cwd: parent, assetsDir: parent }), /not a git repository/);
+});

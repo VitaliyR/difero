@@ -477,3 +477,68 @@ test('clicking a separator bar reveals 30 lines next to the change', async (t) =
   assert.equal(await code.getByText('line 71', { exact: true }).count(), 1);
   assert.equal(await code.getByText('line 10', { exact: true }).count(), 0);
 });
+
+test('a folder of repositories switches between them from the sidebar', async (t) => {
+  const parent = await mkdtemp(join(tmpdir(), 'difero-browser-workspace-'));
+  t.after(() => rm(parent, { recursive: true, force: true }));
+  for (const name of ['api', 'web']) {
+    const root = join(parent, name);
+    git(parent, 'init', '-q', name);
+    await writeFile(join(root, `${name}.txt`), `${name}\n`);
+  }
+
+  const { server, url } = await startServer({ cwd: parent, assetsDir });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.goto(url);
+  await page.locator('.file-row[data-path="api.txt"]').waitFor();
+  assert.equal(new URL(page.url()).searchParams.get('repo'), 'api');
+  assert.equal(await page.locator('.repo-row').count(), 2);
+  assert.equal(await page.locator('.repo-row.active').getAttribute('data-repo'), 'api');
+  assert.equal(await page.locator('.repo-name').innerText(), 'api');
+
+  const filter = page.getByLabel('Filter repositories and files');
+  await filter.fill('we');
+  assert.deepEqual(
+    await page.locator('.repo-row').evaluateAll((rows) => rows.map((row) => row.dataset.repo)),
+    ['web'],
+  );
+  await filter.fill('xyz');
+  assert.equal(await page.locator('.repo-row').count(), 0);
+  await page.locator('#repo-list').getByText('No matching repositories').waitFor();
+  assert.equal(await page.locator('.file-row').count(), 0);
+  await filter.fill('web');
+  await page.locator('.repo-row[data-repo="web"]').click();
+  assert.equal(await filter.inputValue(), '');
+  await page.locator('.file-row[data-path="web.txt"]').waitFor();
+  assert.equal(await page.locator('.file-row').count(), 1);
+  assert.equal(new URL(page.url()).searchParams.get('repo'), 'web');
+  assert.equal(await page.title(), `Difero - ${parent.split('/').at(-1)}/web`);
+
+  await page.goto(url);
+  await page.locator('.file-row[data-path="web.txt"]').waitFor();
+
+  await rm(join(parent, 'web'), { recursive: true, force: true });
+  await page.keyboard.press('r');
+  await page.locator('.file-row[data-path="api.txt"]').waitFor();
+  assert.equal(new URL(page.url()).searchParams.get('repo'), 'api');
+  assert.equal(await page.locator('.repo-row.active').getAttribute('data-repo'), 'api');
+  assert.equal(await page.locator('.repo-row').count(), 1);
+
+  await rm(join(parent, 'api'), { recursive: true, force: true });
+  await page.keyboard.press('r');
+  await page.getByRole('heading', { name: 'No repositories' }).waitFor();
+  assert.equal(await page.locator('.file-row').count(), 0);
+  assert.equal(await page.locator('.repo-row').count(), 0);
+  await page.locator('#repo-list').getByText('No repositories').waitFor();
+  assert.equal(new URL(page.url()).searchParams.get('repo'), null);
+  assert.equal(await page.locator('.repo-name').count(), 0);
+
+  git(parent, 'init', '-q', 'docs');
+  await writeFile(join(parent, 'docs', 'guide.md'), '# guide\n');
+  await page.keyboard.press('r');
+  await page.locator('.file-row[data-path="guide.md"]').waitFor();
+  assert.equal(new URL(page.url()).searchParams.get('repo'), 'docs');
+});

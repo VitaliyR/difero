@@ -9,6 +9,7 @@
     order,
     mode,
     base,
+    repo,
     collapsed,
     comments,
     draft,
@@ -22,7 +23,7 @@
   } = $props();
 
   function imageUrl(side) {
-    return `/api/image?${new URLSearchParams({ mode, path: file.path, side, ...(base ? { base } : {}) })}`;
+    return `/api/image?${new URLSearchParams({ mode, path: file.path, side, ...(base ? { base } : {}), ...(repo ? { repo } : {}) })}`;
   }
 
   let card;

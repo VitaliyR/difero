@@ -5,6 +5,10 @@
   import { tooltip } from './tooltip.js';
 
   let {
+    workspace,
+    repos,
+    repo,
+    onSelectRepo,
     files,
     loaded,
     commentsByPath,
@@ -17,27 +21,62 @@
   } = $props();
 
   let rows = $derived(treeRows(files, collapsedFolders, search));
+  let visibleRepos = $derived(
+    repos.filter(({ name }) => name.toLowerCase().includes(search.toLowerCase())),
+  );
   let additions = $derived(files.reduce((total, file) => total + file.additions, 0));
   let deletions = $derived(files.reduce((total, file) => total + file.deletions, 0));
 </script>
 
 <aside class="sidebar">
-  <div class="sidebar-heading">
-    <span>FILES</span>
-    <span id="file-count" class="file-count" style:visibility={loaded ? null : 'hidden'}>
-      {files.length}
-    </span>
-  </div>
   <div class="search-wrap">
     <span aria-hidden="true">⌕</span>
     <input
       id="file-search"
       type="search"
-      placeholder="Filter files"
-      aria-label="Filter files"
+      placeholder={workspace ? 'Filter repositories and files' : 'Filter files'}
+      aria-label={workspace ? 'Filter repositories and files' : 'Filter files'}
       value={search}
       oninput={(event) => onSearch(event.currentTarget.value)}
     />
+  </div>
+  {#if workspace}
+    <div class="sidebar-heading">
+      <span>REPOSITORIES</span>
+      <span class="file-count">{repos.length}</span>
+    </div>
+    <div id="repo-list" class="repo-list">
+      {#each visibleRepos as item (item.name)}
+        <button
+          type="button"
+          class="repo-row"
+          style="--depth:0"
+          class:active={item.name === repo}
+          aria-pressed={item.name === repo}
+          data-repo={item.name}
+          {@attach tooltip(item.path)}
+          onclick={() => onSelectRepo(item.name)}
+        >
+          <span
+            class="folder-icon"
+            style={`mask-image:url('${folderIcon}')`}
+            aria-hidden="true"
+          ></span>
+          <span class="file-name">{item.name}</span>
+          {#if item.changes}<span class="repo-changes">{item.changes}</span>{/if}
+        </button>
+      {:else}
+        <div class="sidebar-empty">
+          {repos.length ? 'No matching repositories' : 'No repositories'}
+        </div>
+      {/each}
+    </div>
+  {/if}
+  <div class="sidebar-heading">
+    <span>FILES</span>
+    <span id="file-count" class="file-count" style:visibility={loaded ? null : 'hidden'}>
+      {files.length}
+    </span>
   </div>
   <div id="file-list" class="file-list">
     {#each rows as row (row.kind + row.path)}
@@ -126,7 +165,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 15px 14px 10px;
+    padding: 12px 14px 6px;
     color: var(--text-subtle);
     font-size: 11px;
     font-weight: 760;
@@ -140,7 +179,7 @@
     color: var(--text-muted);
   }
   .search-wrap {
-    margin: 0 9px 8px;
+    margin: 12px 9px 0;
     border: 1px solid var(--border);
     border-radius: 7px;
     background: var(--surface-raised);
@@ -174,6 +213,22 @@
     flex: 1;
     padding: 2px 5px 10px;
   }
+  .repo-list {
+    flex: none;
+    max-height: 30vh;
+    overflow: auto;
+    padding: 0 5px 8px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .repo-row.active {
+    background: var(--accent-bg);
+    color: var(--text);
+  }
+  .repo-changes {
+    color: var(--text-subtle);
+    font-size: 11px;
+  }
+  .repo-row,
   .file-row,
   .folder-row {
     display: flex;
@@ -188,6 +243,7 @@
     padding: 4px 8px 4px calc(8px + var(--depth) * 14px);
     min-height: 29px;
   }
+  .repo-row:hover,
   .file-row:hover,
   .folder-row:hover {
     background: var(--surface-control);
@@ -278,7 +334,7 @@
     font-size: 10px;
   }
   .sidebar-empty {
-    padding: 15px 12px;
+    padding: 6px 12px;
     color: var(--text-subtle);
     font-size: 12px;
   }
@@ -317,6 +373,7 @@
       min-height: 0;
       height: auto;
     }
+    .repo-row,
     .file-row,
     .folder-row {
       min-height: 36px;

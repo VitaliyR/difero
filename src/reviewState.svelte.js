@@ -20,6 +20,7 @@ const PRELOAD_TIMEOUT = 1500;
 const validModes = new Set(['all', 'base', 'staged', 'unstaged']);
 const initialMode = new URLSearchParams(window.location.search).get('mode');
 const initialBase = new URLSearchParams(window.location.search).get('base');
+const initialRepo = new URLSearchParams(window.location.search).get('repo');
 
 export class ReviewState {
   mode = $state(validModes.has(initialMode) ? initialMode : 'all');
@@ -28,6 +29,10 @@ export class ReviewState {
   branches = $state.raw([]);
   loadedMode = $state(this.mode);
   root = $state('');
+  workspace = $state('');
+  repos = $state.raw([]);
+  repo = $state(initialRepo || '');
+  loadedRepo = $state('');
   files = $state.raw([]);
   comments = $state.raw([]);
   draft = $state.raw(null);
@@ -158,11 +163,66 @@ export class ReviewState {
     this.toastTimer = setTimeout(() => (this.toastVisible = false), 2800);
   }
 
+  repoKey() {
+    return `difero:repo:${this.workspace}`;
+  }
+
+  async loadRepos() {
+    try {
+      const response = await fetch('/api/repos', { cache: 'no-store' });
+      if (!response.ok) throw new Error(await response.text());
+      const result = await response.json();
+      this.workspace = result.workspace || '';
+      this.repos = result.repos;
+    } catch (error) {
+      this.toast(`Could not load repositories: ${error.message}`);
+      return;
+    }
+    if (!this.workspace || this.repos.some(({ name }) => name === this.repo)) return;
+    const saved = localStorage.getItem(this.repoKey());
+    const repo =
+      this.repos.find(({ name }) => name === saved) ??
+      this.repos.find(({ changes }) => changes) ??
+      this.repos[0];
+    if (!repo) {
+      this.clearRepo();
+    } else if (this.loaded) {
+      this.switchRepo(repo.name);
+    } else {
+      this.updateUrl('repo', repo.name);
+      this.repo = repo.name;
+    }
+  }
+
+  clearRepo() {
+    this.request++;
+    this.repo = '';
+    this.loadedRepo = '';
+    this.updateUrl('repo', '');
+    document.title = `Difero - ${this.workspace.split(/[\\/]/).filter(Boolean).slice(-2).join('/')}`;
+    this.root = '';
+    this.comments = [];
+    this.files = [];
+    this.snapshot = null;
+    this.activeFile = null;
+    this.draft = null;
+    this.loading = false;
+    this.loaded = true;
+  }
+
+  async start() {
+    await this.loadRepos();
+    await this.reload();
+  }
+
   async reload() {
+    if (this.workspace && !this.repo) return this.loadRepos();
     const currentRequest = ++this.request;
     this.loading = true;
+    const repos = this.workspace && this.loaded ? this.loadRepos() : null;
     try {
       const params = new URLSearchParams({ mode: this.mode });
+      if (this.workspace) params.set('repo', this.repo);
       if (this.mode === 'base' && this.base) params.set('base', this.base);
       const response = await fetch(`/api/diff?${params}`, { cache: 'no-store' });
       if (!response.ok) throw new Error(await response.text());
@@ -183,6 +243,7 @@ export class ReviewState {
       if (currentRequest !== this.request) return;
       this.snapshot = result.snapshot;
       this.loadedMode = result.mode;
+      this.loadedRepo = this.workspace ? params.get('repo') : '';
       this.loadedBase = result.base || '';
       this.branches = result.branches || [];
       if (result.mode === 'base') this.base = result.base || '';
@@ -192,6 +253,7 @@ export class ReviewState {
       await tick();
       this.updateActiveFile();
     } catch (error) {
+      await repos;
       if (currentRequest === this.request) this.toast(`Could not load diff: ${error.message}`);
     } finally {
       if (currentRequest === this.request) {
@@ -201,12 +263,17 @@ export class ReviewState {
     }
   }
 
+  updateUrl(key, value) {
+    const url = new URL(window.location.href);
+    if (value) url.searchParams.set(key, value);
+    else url.searchParams.delete(key);
+    history.replaceState(null, '', url);
+  }
+
   setMode(nextMode) {
     if (this.mode === nextMode) return;
     this.mode = nextMode;
-    const url = new URL(window.location.href);
-    url.searchParams.set('mode', nextMode);
-    history.replaceState(null, '', url);
+    this.updateUrl('mode', nextMode);
     this.draft = null;
     this.reload();
   }
@@ -214,10 +281,26 @@ export class ReviewState {
   setBase(base) {
     if (this.base === base) return;
     this.base = base;
-    const url = new URL(window.location.href);
-    url.searchParams.set('base', base);
-    history.replaceState(null, '', url);
+    this.updateUrl('base', base);
     this.draft = null;
+    this.reload();
+  }
+
+  setRepo(repo) {
+    if (this.repo === repo) return;
+    localStorage.setItem(this.repoKey(), repo);
+    this.switchRepo(repo);
+  }
+
+  switchRepo(repo) {
+    this.repo = repo;
+    this.updateUrl('repo', repo);
+    this.base = '';
+    this.updateUrl('base', '');
+    this.draft = null;
+    this.search = '';
+    this.collapsedFolders = new Set();
+    window.scrollTo({ top: 0, behavior: 'instant' });
     this.reload();
   }
 

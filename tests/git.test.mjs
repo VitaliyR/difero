@@ -4,7 +4,7 @@ import { chmod, mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { findRoot, getChanges, getImage } from '../server/git.mjs';
+import { countChanges, findRepos, findRoot, getChanges, getImage } from '../server/git.mjs';
 
 function git(root, ...args) {
   execFileSync('git', ['-C', root, ...args], { stdio: 'pipe' });
@@ -243,4 +243,32 @@ test('permission-only changes are listed with their file modes', async (t) => {
     assert.equal(files[0].deletions, 0);
   }
   assert.equal((await getChanges(root, 'staged')).files.length, 0);
+});
+
+test('findRepos lists child repositories and countChanges counts their changed files', async (t) => {
+  const parent = await mkdtemp(join(tmpdir(), 'difero-workspace-'));
+  t.after(() => rm(parent, { recursive: true, force: true }));
+  for (const name of ['web', 'api', '.hidden', 'node_modules']) {
+    git(parent, 'init', '-q', name);
+  }
+  await mkdir(join(parent, 'docs'));
+  await writeFile(join(parent, 'notes.txt'), 'not a repo\n');
+  await mkdir(join(parent, 'broken'));
+  await writeFile(join(parent, 'broken', '.git'), 'not a gitfile\n');
+  const api = join(parent, 'api');
+  git(api, 'config', 'user.email', 'test@example.com');
+  git(api, 'config', 'user.name', 'Test');
+  git(api, 'config', 'commit.gpgsign', 'false');
+  await writeFile(join(api, 'old.txt'), 'old\n');
+  git(api, 'add', '.');
+  git(api, 'commit', '-qm', 'initial');
+  git(api, 'mv', 'old.txt', 'new.txt');
+  await writeFile(join(api, 'fresh.txt'), 'fresh\n');
+
+  assert.deepEqual(await findRepos(parent), [
+    { name: 'api', path: api },
+    { name: 'web', path: join(parent, 'web') },
+  ]);
+  assert.equal(await countChanges(api), 2);
+  assert.equal(await countChanges(join(parent, 'web')), 0);
 });
