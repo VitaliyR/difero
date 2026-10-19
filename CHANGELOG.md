@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/VitaliyR/difero/compare/difero-v1.2.0...difero-v1.3.0) (2026-10-19)
+
+
+### Features
+
+* multi repo support ([3f2d151](https://github.com/VitaliyR/difero/commit/3f2d151bd73c51478a41a32534abbec5370f02dd))
+
 ## [1.2.0](https://github.com/VitaliyR/difero/compare/difero-v1.1.0...difero-v1.2.0) (2026-10-18)
 
 
