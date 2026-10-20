@@ -35,6 +35,7 @@ export class ReviewState {
   loadedRepo = $state('');
   files = $state.raw([]);
   comments = $state.raw([]);
+  otherComments = $state.raw([]);
   draft = $state.raw(null);
   loading = $state(false);
   loaded = $state(false);
@@ -44,6 +45,7 @@ export class ReviewState {
   collapsedFiles = $state.raw({});
   toastMessage = $state('');
   toastVisible = $state(false);
+  toastAction = $state.raw(null);
   commentsByPath = $derived(groupByPath(this.comments, this.previousGroups));
   previousGroups = new Map();
   request = 0;
@@ -117,18 +119,18 @@ export class ReviewState {
     ]);
   }
 
-  commentsKey() {
-    return `difero:comments:${this.root}`;
+  commentsKey(root = this.root) {
+    return `difero:comments:${root}`;
   }
 
   collapsedFilesKey() {
     return `difero:collapsed-files:${this.root}`;
   }
 
-  loadComments() {
+  readComments(root) {
     try {
-      const value = JSON.parse(localStorage.getItem(this.commentsKey()) || '[]');
-      this.comments = Array.isArray(value)
+      const value = JSON.parse(localStorage.getItem(this.commentsKey(root)) || '[]');
+      return Array.isArray(value)
         ? value.filter(
             (item) =>
               typeof item.path === 'string' &&
@@ -137,8 +139,22 @@ export class ReviewState {
           )
         : [];
     } catch {
-      this.comments = [];
+      return [];
     }
+  }
+
+  loadComments() {
+    this.comments = this.readComments(this.root);
+    this.loadOtherComments();
+  }
+
+  loadOtherComments() {
+    this.otherComments = this.workspace
+      ? this.repos
+          .filter(({ path }) => path !== this.root)
+          .map(({ name, path }) => ({ name, root: path, comments: this.readComments(path) }))
+          .filter(({ comments }) => comments.length)
+      : [];
   }
 
   loadCollapsedFiles() {
@@ -156,11 +172,28 @@ export class ReviewState {
     localStorage.setItem(this.commentsKey(), JSON.stringify(this.comments));
   }
 
-  toast(message) {
+  toast(message, action = null) {
     this.toastMessage = message;
+    this.toastAction = action;
     this.toastVisible = true;
     clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => (this.toastVisible = false), 2800);
+    this.toastTimer = setTimeout(() => this.hideToast(), action ? 6000 : 2800);
+  }
+
+  holdToast() {
+    clearTimeout(this.toastTimer);
+  }
+
+  releaseToast() {
+    if (!this.toastVisible) return;
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => this.hideToast(), 2000);
+  }
+
+  hideToast() {
+    clearTimeout(this.toastTimer);
+    this.toastVisible = false;
+    this.toastAction = null;
   }
 
   repoKey() {
@@ -174,6 +207,7 @@ export class ReviewState {
       const result = await response.json();
       this.workspace = result.workspace || '';
       this.repos = result.repos;
+      this.loadOtherComments();
     } catch (error) {
       this.toast(`Could not load repositories: ${error.message}`);
       return;
@@ -202,6 +236,7 @@ export class ReviewState {
     document.title = `Difero - ${this.workspace.split(/[\\/]/).filter(Boolean).slice(-2).join('/')}`;
     this.root = '';
     this.comments = [];
+    this.loadOtherComments();
     this.files = [];
     this.snapshot = null;
     this.activeFile = null;
@@ -304,19 +339,63 @@ export class ReviewState {
     this.reload();
   }
 
-  async copyComments({ clear }) {
-    if (!this.comments.length) return;
+  // scope 'all' includes the workspace's other repositories; 'repo' only the current one.
+  async copyComments({ clear, scope = 'all' }) {
+    const current = {
+      name: this.repos.find(({ path }) => path === this.root)?.name ?? this.loadedRepo,
+      root: this.root,
+      comments: this.comments,
+    };
+    const groups = [current, ...(scope === 'all' ? this.otherComments : [])]
+      .filter(({ comments }) => comments.length)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!groups.length) return;
+    // In a workspace each repository's comments sit under its folder name.
+    const text = this.workspace
+      ? groups.map(({ name, comments }) => `${name}/\n${formatComments(comments)}`).join('\n\n')
+      : formatComments(groups[0].comments);
     try {
-      await navigator.clipboard.writeText(formatComments(this.comments));
+      await navigator.clipboard.writeText(text);
       if (clear) {
-        this.comments = [];
-        this.draft = null;
-        this.saveComments();
+        for (const group of groups) {
+          if (group === current) {
+            this.comments = [];
+            this.draft = null;
+            this.saveComments();
+          } else {
+            localStorage.removeItem(this.commentsKey(group.root));
+          }
+        }
+        this.loadOtherComments();
       }
-      this.toast(clear ? 'Comments copied and cleared' : 'Comments copied');
+      const from = groups.length > 1 ? ` from ${groups.length} repositories` : '';
+      if (clear) {
+        this.toast(`Comments${from} copied and cleared`, {
+          label: 'Undo',
+          run: () => this.restoreComments(groups),
+        });
+      } else {
+        this.toast(`Comments${from} copied`);
+      }
     } catch {
       this.toast('Clipboard access failed. Check browser permissions.');
     }
+  }
+
+  restoreComments(groups) {
+    for (const { root, comments } of groups) {
+      const current = root === this.root ? this.comments : this.readComments(root);
+      const ids = new Set(current.map(({ id }) => id));
+      const restored = [...comments.filter(({ id }) => !ids.has(id)), ...current];
+      if (root === this.root) {
+        this.comments = restored;
+        this.saveComments();
+      } else {
+        localStorage.setItem(this.commentsKey(root), JSON.stringify(restored));
+      }
+    }
+    this.loadOtherComments();
+    this.toast('Comments restored');
   }
 
   async navigateToFile(path) {

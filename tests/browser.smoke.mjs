@@ -380,7 +380,10 @@ test('browser review flow: tree, navigation, resize, comments, and shortcuts', a
   }
   const deleteComment = freshCard.getByRole('button', { name: 'Delete comment on src/fresh.js:2' });
   assert.ok(await deleteComment.locator('.trash-icon').count());
-  await page.keyboard.press('c');
+  await page.keyboard.down('Shift');
+  assert.equal(await page.locator('.copy-button').innerText(), 'Copy & clear comments · 2');
+  await page.keyboard.up('Shift');
+  await page.keyboard.press('Alt+c');
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   assert.match(copied, /src\/fresh\.js:1 Check first line/);
   assert.match(copied, /src\/fresh\.js:2 Check second line/);
@@ -394,14 +397,18 @@ test('browser review flow: tree, navigation, resize, comments, and shortcuts', a
   await freshCard.getByText('Check updated first line').waitFor();
   await page.reload();
   await freshCard.getByText('Check updated first line').waitFor();
-  await page.keyboard.press('c');
+  await page.keyboard.press('Alt+c');
   assert.match(
     await page.evaluate(() => navigator.clipboard.readText()),
     /src\/fresh\.js:1 Check updated first line/,
   );
   await deleteComment.click();
   assert.equal(await freshCard.getByText('Comment · src/fresh.js:2').count(), 0);
-  await page.keyboard.press('Alt+c');
+  await page.keyboard.press('c');
+  await page.waitForFunction(() => document.querySelector('.copy-button')?.disabled);
+  await page.locator('.toast-action').click();
+  await freshCard.getByText('Check updated first line').waitFor();
+  await page.keyboard.press('c');
   await page.waitForFunction(() => document.querySelector('.copy-button')?.disabled);
   git(root, 'reset', '-q', 'HEAD');
   await page.keyboard.press('2');
@@ -541,4 +548,67 @@ test('a folder of repositories switches between them from the sidebar', async (t
   await page.keyboard.press('r');
   await page.locator('.file-row[data-path="guide.md"]').waitFor();
   assert.equal(new URL(page.url()).searchParams.get('repo'), 'docs');
+});
+
+test('copying comments in a folder of repositories includes every repository', async (t) => {
+  const parent = await mkdtemp(join(tmpdir(), 'difero-browser-workspace-'));
+  t.after(() => rm(parent, { recursive: true, force: true }));
+  for (const name of ['api', 'web']) {
+    git(parent, 'init', '-q', name);
+    await writeFile(join(parent, name, `${name}.txt`), `${name}\n`);
+  }
+
+  const { server, url } = await startServer({ cwd: parent, assetsDir });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    permissions: ['clipboard-read', 'clipboard-write'],
+  });
+  const page = await context.newPage();
+  await page.goto(url);
+  await page.locator('.file-row[data-path="api.txt"]').waitFor();
+  await page.evaluate((parent) => {
+    for (const name of ['api', 'web']) {
+      const comment = { id: name, path: `${name}.txt`, line: 1, side: 'additions', text: name };
+      localStorage.setItem(`difero:comments:${parent}/${name}`, JSON.stringify([comment]));
+    }
+  }, parent);
+  await page.reload();
+  const button = page.locator('.copy-button');
+  await page.locator('.file-row[data-path="api.txt"]').waitFor();
+  assert.equal(await button.innerText(), 'Copy & clear all comments · 2');
+  await page.keyboard.down('Shift');
+  await page.waitForFunction(() =>
+    document.querySelector('.copy-button').innerText.includes('repo'),
+  );
+  assert.equal(await button.innerText(), 'Copy & clear repo comments · 1');
+  await page.keyboard.down('Alt');
+  await page.waitForFunction(() => !document.querySelector('.copy-button').innerText.includes('&'));
+  assert.equal(await button.innerText(), 'Copy repo comments · 1');
+  await button.click({ modifiers: ['Alt', 'Shift'] });
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), 'api/\napi.txt:1 api');
+  await page.keyboard.up('Alt');
+  await page.keyboard.up('Shift');
+
+  await page.locator('.repo-row[data-repo="web"]').click();
+  await page.locator('.file-row[data-path="web.txt"]').waitFor();
+  assert.equal(await button.innerText(), 'Copy & clear all comments · 2');
+  await button.click();
+  assert.equal(
+    await page.evaluate(() => navigator.clipboard.readText()),
+    'api/\napi.txt:1 api\n\nweb/\nweb.txt:1 web',
+  );
+  assert.equal(await button.isDisabled(), true);
+  assert.equal(await button.innerText(), 'Copy & clear all comments');
+  await page.getByRole('button', { name: 'Undo' }).hover();
+  await page.waitForTimeout(6500);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  assert.equal(await button.innerText(), 'Copy & clear all comments · 2');
+  await page.locator('.repo-row[data-repo="api"]').click();
+  await page.locator('.file-row[data-path="api.txt"]').waitFor();
+  await page.keyboard.press('Shift+c');
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), 'api/\napi.txt:1 api');
+  assert.equal(await button.innerText(), 'Copy & clear all comments · 1');
 });

@@ -4,7 +4,7 @@ A local browser UI for reviewing Git changes and collecting line comments.
 
 ![difero review interface][ui]
 
-[ui]: https://raw.githubusercontent.com/VitaliyR/difero/main/docs/screenshot.jpg
+[ui]: https://raw.githubusercontent.com/VitaliyR/difero/main/docs/screenshot.png
 
 ## Why another tool?
 
@@ -161,8 +161,9 @@ A few things to keep in mind:
 | `R`     | Reload changes                                              |
 | `J`     | Go to next file                                             |
 | `K`     | Go to previous file                                         |
-| `C`     | Copy comments without clearing                              |
-| `Alt+C` | Copy and clear comments                                     |
+| `C`     | Copy and clear comments                                     |
+| `Alt+C` | Copy comments without clearing                              |
+| `Shift` | With `C`/`Alt+C`, only the current repository (multi-repo)  |
 | `?`     | Show all shortcuts                                          |
 
 Base suggests the remote default branch, then `main` or `master`. Select another
@@ -175,9 +176,15 @@ Save with `⌘/Ctrl+Enter`. Use the pencil button to edit a comment.
 
 **Copy & clear comments** copies lines in `path:line comment` format and clears
 the review; old-side comments include `(old)` after the line number. Hold
-**Alt** while clicking to copy without clearing. With the keyboard, `C` copies
-and `Alt+C` copies and clears. Comments are stored locally in your browser for
-this repository until cleared.
+**Alt** to copy without clearing; the `C` shortcut follows the same rule. The
+confirmation toast offers **Undo** to bring cleared comments back. Comments are
+stored locally in your browser for each repository until cleared.
+
+In a folder of repositories, comments stay with their repository when you
+switch, and copying includes every repository's comments, each group under its
+folder name (`repo/` followed by its `path:line comment` lines). Hold **Shift**
+to copy only the current repository. The button label follows the held modifiers
+so it always shows what a click does.
 
 The sidebar groups files by folder and can be resized by dragging its right
 edge. Click a file heading to collapse its diff; files over 500 lines start

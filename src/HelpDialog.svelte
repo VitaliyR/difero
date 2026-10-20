@@ -2,9 +2,9 @@
   import closeIcon from './assets/close.svg';
   import { version } from '../package.json';
 
-  let { open = $bindable(false) } = $props();
+  let { open = $bindable(false), workspace = false } = $props();
   let dialog;
-  const shortcuts = [
+  let shortcuts = $derived([
     ['Working changes', '1'],
     ['Staged changes', '2'],
     ['Unstaged changes', '3'],
@@ -12,10 +12,11 @@
     ['Next file', 'J'],
     ['Previous file', 'K'],
     ['Reload changes', 'R'],
-    ['Copy comments', 'C'],
-    ['Copy and clear comments', 'Alt+C'],
+    ['Copy and clear comments', 'C'],
+    ['Copy and keep comments', 'Alt+C'],
+    ...(workspace ? [['Copy this repository only', 'Shift+C']] : []),
     ['Show shortcuts', '?'],
-  ];
+  ]);
 
   $effect(() => {
     if (!dialog) return;

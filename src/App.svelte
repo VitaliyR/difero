@@ -79,7 +79,7 @@
       return;
     if ((event.key.toLowerCase() === 'c' || event.code === 'KeyC') && !event.repeat) {
       event.preventDefault();
-      review.copyComments({ clear: event.altKey });
+      review.copyComments({ clear: !event.altKey, scope: event.shiftKey ? 'repo' : 'all' });
       return;
     }
     if (event.altKey) return;
@@ -114,7 +114,9 @@
   base={review.base}
   branches={review.branches}
   loading={review.loading}
+  workspace={Boolean(review.workspace)}
   commentCount={review.comments.length}
+  otherCommentCount={review.otherComments.reduce((sum, { comments }) => sum + comments.length, 0)}
   onModeChange={(mode) => review.setMode(mode)}
   onBaseChange={(base) => review.setBase(base)}
   onReload={() => review.reload()}
@@ -242,9 +244,31 @@
   </main>
 </div>
 
-<HelpDialog bind:open={shortcutsOpen} />
-<div id="toast" class="toast" class:visible={review.toastVisible} role="status" aria-live="polite">
+<HelpDialog bind:open={shortcutsOpen} workspace={Boolean(review.workspace)} />
+<div
+  id="toast"
+  class="toast"
+  class:visible={review.toastVisible}
+  class:has-action={review.toastAction}
+  role="status"
+  aria-live="polite"
+  onpointerenter={() => review.toastAction && review.holdToast()}
+  onpointerleave={() => review.toastAction && review.releaseToast()}
+>
   {review.toastMessage}
+  {#if review.toastAction}
+    <button
+      type="button"
+      class="toast-action"
+      onclick={() => {
+        const { run } = review.toastAction;
+        review.hideToast();
+        run();
+      }}
+    >
+      {review.toastAction.label}
+    </button>
+  {/if}
 </div>
 
 <style>
@@ -344,6 +368,21 @@
   .toast.visible {
     opacity: 1;
     transform: translateY(0);
+  }
+  .toast.visible.has-action {
+    pointer-events: auto;
+  }
+  .toast-action {
+    margin-left: 12px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent-text);
+    font: inherit;
+    font-weight: 700;
+  }
+  .toast-action:hover {
+    text-decoration: underline;
   }
   @media (max-width: 850px) {
     .layout {

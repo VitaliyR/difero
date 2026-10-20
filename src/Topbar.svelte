@@ -11,6 +11,8 @@
     branches,
     loading,
     commentCount,
+    otherCommentCount,
+    workspace,
     onModeChange,
     onBaseChange,
     onReload,
@@ -27,7 +29,29 @@
   ];
   let repoName = $derived(root.split('/').at(-1));
   let modeLabel = $derived(modes.find((tab) => tab.id === mode)?.label);
+
+  let altKey = $state(false);
+  let shiftKey = $state(false);
+  let repoOnly = $derived(workspace && shiftKey);
+  let copyCount = $derived(commentCount + (repoOnly ? 0 : otherCommentCount));
+
+  function syncModifiers(event) {
+    altKey = event.altKey;
+    shiftKey = event.shiftKey;
+  }
+
+  function resetModifiers() {
+    altKey = false;
+    shiftKey = false;
+  }
 </script>
+
+<svelte:window
+  onkeydown={syncModifiers}
+  onkeyup={syncModifiers}
+  onpointermove={syncModifiers}
+  onblur={resetModifiers}
+/>
 
 <header id="topbar" class="topbar">
   <button
@@ -100,16 +124,18 @@
     <button
       type="button"
       class="copy-button"
-      disabled={!commentCount}
+      class:copy-only={altKey}
+      disabled={!copyCount}
       {@attach tooltip(
-        'Click — copy & clear\nAlt+click — copy only\nC — copy only\nAlt+C — copy & clear',
+        `Click or C — copy & clear\nAlt — keep comments${workspace ? '\nShift — this repo only' : ''}`,
       )}
-      onclick={(event) => onCopy({ clear: !event.altKey })}
+      onclick={(event) => onCopy({ clear: !event.altKey, scope: event.shiftKey ? 'repo' : 'all' })}
     >
       Copy
-      <span class="copy-clear">& clear</span>
+      {#if !altKey}<span class="copy-clear">& clear</span>{/if}
+      {#if workspace}<span class="copy-scope">{repoOnly ? 'repo' : 'all'}</span>{/if}
       <span class="copy-suffix">comments</span>
-      {commentCount ? `  ·  ${commentCount}` : ''}
+      {copyCount ? `  ·  ${copyCount}` : ''}
     </button>
     <button
       type="button"
@@ -141,25 +167,40 @@
         <button
           type="button"
           role="menuitem"
-          disabled={!commentCount}
+          disabled={!commentCount && !otherCommentCount}
           onclick={() => {
             close();
             onCopy({ clear: true });
           }}
         >
-          Copy & clear comments{commentCount ? ` · ${commentCount}` : ''}
+          Copy & clear {workspace ? 'all ' : ''}comments{commentCount + otherCommentCount
+            ? ` · ${commentCount + otherCommentCount}`
+            : ''}
         </button>
         <button
           type="button"
           role="menuitem"
-          disabled={!commentCount}
+          disabled={!commentCount && !otherCommentCount}
           onclick={() => {
             close();
             onCopy({ clear: false });
           }}
         >
-          Copy comments
+          Copy {workspace ? 'all ' : ''}comments
         </button>
+        {#if workspace}
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!commentCount}
+            onclick={() => {
+              close();
+              onCopy({ clear: false, scope: 'repo' });
+            }}
+          >
+            Copy repo comments{commentCount ? ` · ${commentCount}` : ''}
+          </button>
+        {/if}
         <hr />
         <button
           type="button"
@@ -358,6 +399,12 @@
   }
   .copy-button:hover:not(:disabled) {
     background: var(--accent-hover);
+  }
+  .copy-button.copy-only {
+    background: transparent;
+  }
+  .copy-button.copy-only:hover:not(:disabled) {
+    background: var(--accent);
   }
   .copy-button:disabled {
     opacity: 0.45;
