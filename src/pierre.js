@@ -46,6 +46,7 @@ export function createDiff({
   file,
   metadata,
   container,
+  diffStyle,
   getComments,
   getDraft,
   onBegin,
@@ -72,39 +73,62 @@ export function createDiff({
     return host;
   }
 
-  const instance = new FileDiff(
-    {
-      theme: THEME,
-      themeType: 'dark',
-      diffStyle: 'unified',
-      disableFileHeader: true,
-      hunkSeparators: 'line-info',
-      expansionLineCount: 30,
-      enableGutterUtility: true,
-      lineHoverHighlight: 'both',
-      // The library's overscroll-behavior-x: none makes Chrome latch any wheel
-      // gesture that starts with a horizontal component to the code block, which
-      // can't scroll vertically, so the page ignores the rest of the gesture.
-      unsafeCSS:
-        '[data-code] { overscroll-behavior-x: auto; } [data-separator-content] { cursor: pointer; }',
-      renderGutterUtility(getHoveredLine) {
-        const host = document.createElement('span');
-        gutterMounted.push(
-          mount(GutterCommentButton, {
-            target: host,
-            props: { path: file.path, getHoveredLine, onBegin },
-          }),
-        );
-        flushSync();
-        return host;
-      },
-      onLineNumberClick({ lineNumber, annotationSide }) {
-        onBegin(file.path, lineNumber, annotationSide);
-      },
-      renderAnnotation,
+  const options = {
+    theme: THEME,
+    themeType: 'dark',
+    diffStyle,
+    disableFileHeader: true,
+    hunkSeparators: 'line-info',
+    expansionLineCount: 30,
+    enableGutterUtility: true,
+    lineHoverHighlight: 'both',
+    // The library's overscroll-behavior-x: none makes Chrome latch any wheel
+    // gesture that starts with a horizontal component to the code block, which
+    // can't scroll vertically, so the page ignores the rest of the gesture.
+    // The library renders an "Expand all" button for long gaps but hides it.
+    unsafeCSS: `
+      [data-code] { overscroll-behavior-x: auto; }
+      [data-separator-content] { cursor: pointer; }
+      [data-gutter] [data-expand-all-button]:not([data-additions] *) {
+        display: flex;
+        padding: 0 1ch;
+        border-right: 0;
+        border-radius: 0 6px 6px 0;
+        white-space: nowrap;
+      }
+      [data-gutter] [data-separator-wrapper]:has([data-expand-all-button]) [data-separator-content] {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+      }
+      [data-gutter] [data-expand-all-button]:hover {
+        color: var(--diffs-fg-number);
+        text-decoration: underline;
+      }
+      [data-separator-wrapper]:has([data-expand-all-button]) {
+        grid-auto-columns: max-content;
+      }
+      [data-separator-wrapper] [data-expand-all-button] {
+        grid-column: 3;
+        grid-row: 1 / -1;
+      }
+    `,
+    renderGutterUtility(getHoveredLine) {
+      const host = document.createElement('span');
+      gutterMounted.push(
+        mount(GutterCommentButton, {
+          target: host,
+          props: { path: file.path, getHoveredLine, onBegin },
+        }),
+      );
+      flushSync();
+      return host;
     },
-    getWorkerPool(),
-  );
+    onLineNumberClick({ lineNumber, annotationSide }) {
+      onBegin(file.path, lineNumber, annotationSide);
+    },
+    renderAnnotation,
+  };
+  const instance = new FileDiff(options, getWorkerPool());
 
   function clearAnnotations() {
     for (const component of mounted.splice(0)) unmount(component);
@@ -131,6 +155,12 @@ export function createDiff({
   });
 
   return {
+    setDiffStyle(style) {
+      if (options.diffStyle === style) return;
+      options.diffStyle = style;
+      instance.setOptions({ ...options });
+      instance.rerender();
+    },
     setAnnotations(comments, draft) {
       clearAnnotations();
       instance.setLineAnnotations(annotationsFor(comments, draft));

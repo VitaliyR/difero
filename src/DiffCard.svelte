@@ -8,6 +8,7 @@
     file,
     order,
     mode,
+    diffStyle,
     base,
     repo,
     collapsed,
@@ -85,6 +86,7 @@
         file,
         metadata: value,
         container: target,
+        diffStyle,
         getComments: () => comments,
         getDraft: () => draft,
         onBegin,
@@ -103,6 +105,11 @@
       instance = null;
       diff.cleanUp();
     };
+  });
+
+  $effect(() => {
+    const style = diffStyle;
+    untrack(() => instance)?.setDiffStyle(style);
   });
 
   $effect(() => {

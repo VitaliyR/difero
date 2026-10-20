@@ -21,6 +21,8 @@ const validModes = new Set(['all', 'base', 'staged', 'unstaged']);
 const initialMode = new URLSearchParams(window.location.search).get('mode');
 const initialBase = new URLSearchParams(window.location.search).get('base');
 const initialRepo = new URLSearchParams(window.location.search).get('repo');
+const DIFF_STYLE_KEY = 'difero:diff-style';
+const initialDiffStyle = localStorage.getItem(DIFF_STYLE_KEY) === 'split' ? 'split' : 'unified';
 
 export class ReviewState {
   mode = $state(validModes.has(initialMode) ? initialMode : 'all');
@@ -33,6 +35,7 @@ export class ReviewState {
   repos = $state.raw([]);
   repo = $state(initialRepo || '');
   loadedRepo = $state('');
+  diffStyle = $state(initialDiffStyle);
   files = $state.raw([]);
   comments = $state.raw([]);
   otherComments = $state.raw([]);
@@ -118,6 +121,11 @@ export class ReviewState {
       Promise.all(pending),
       new Promise((resolve) => setTimeout(resolve, PRELOAD_TIMEOUT)),
     ]);
+  }
+
+  setDiffStyle(style) {
+    this.diffStyle = style;
+    localStorage.setItem(DIFF_STYLE_KEY, style);
   }
 
   commentsKey(root = this.root) {

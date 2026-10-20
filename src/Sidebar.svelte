@@ -21,6 +21,7 @@
   } = $props();
 
   let rows = $derived(treeRows(files, collapsedFolders, search));
+  let workspaceName = $derived(workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace);
   let visibleRepos = $derived(
     repos.filter(({ name }) => name.toLowerCase().includes(search.toLowerCase())),
   );
@@ -42,7 +43,7 @@
   </div>
   {#if workspace}
     <div class="sidebar-heading">
-      <span>REPOSITORIES</span>
+      <span class="workspace-name" {@attach tooltip(workspace)}>{workspaceName.toUpperCase()}</span>
       <span class="file-count">{repos.length}</span>
     </div>
     <div id="repo-list" class="repo-list">
@@ -170,6 +171,12 @@
     font-size: 11px;
     font-weight: 760;
     letter-spacing: 1.2px;
+  }
+  .workspace-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .file-count {
     background: var(--surface-control);
