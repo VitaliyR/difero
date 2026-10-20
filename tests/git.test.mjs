@@ -4,7 +4,15 @@ import { chmod, mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { countChanges, findRepos, findRoot, getChanges, getImage } from '../server/git.mjs';
+import {
+  countChanges,
+  findRepos,
+  findRoot,
+  getChanges,
+  getImage,
+  stageAll,
+  undoStageAll,
+} from '../server/git.mjs';
 
 function git(root, ...args) {
   execFileSync('git', ['-C', root, ...args], { stdio: 'pipe' });
@@ -271,4 +279,67 @@ test('findRepos lists child repositories and countChanges counts their changed f
   ]);
   assert.equal(await countChanges(api), 2);
   assert.equal(await countChanges(join(parent, 'web')), 0);
+});
+
+test('undoing stageAll keeps what was staged before it', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'difero-test-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.email', 'test@example.com');
+  git(root, 'config', 'user.name', 'Test');
+  git(root, 'config', 'commit.gpgsign', 'false');
+  await writeFile(join(root, 'changed.txt'), 'one\ntwo\n');
+  await writeFile(join(root, 'removed.txt'), 'gone\n');
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'initial');
+
+  await writeFile(join(root, 'changed.txt'), 'ONE\ntwo\n');
+  git(root, 'add', 'changed.txt');
+  await writeFile(join(root, 'changed.txt'), 'ONE\nTWO\n');
+  await writeFile(join(root, '*literal [name].txt'), 'fresh\n');
+  await writeFile(join(root, 'intended.txt'), 'intended\n');
+  git(root, 'add', '-N', 'intended.txt');
+  await rm(join(root, 'removed.txt'));
+  const stagedBefore = await getChanges(root, 'staged');
+
+  const result = await stageAll(root);
+  assert.equal(result.changed, true);
+  assert.deepEqual(
+    (await getChanges(root, 'staged')).files.map(({ path, newFile }) => [path, newFile]),
+    [
+      ['*literal [name].txt', 'fresh\n'],
+      ['changed.txt', 'ONE\nTWO\n'],
+      ['intended.txt', 'intended\n'],
+      ['removed.txt', null],
+    ],
+  );
+  assert.equal((await stageAll(root)).changed, false);
+
+  await undoStageAll(root, result);
+  assert.deepEqual(await getChanges(root, 'staged'), stagedBefore);
+  assert.equal(
+    execFileSync('git', ['-C', root, 'status', '--porcelain', 'intended.txt'], {
+      encoding: 'utf8',
+    }),
+    ' A intended.txt\n',
+  );
+  assert.equal(
+    (await getChanges(root, 'unstaged')).files.find(({ path }) => path === '*literal [name].txt')
+      .untracked,
+    true,
+  );
+
+  await assert.rejects(undoStageAll(root, result), { status: 409 });
+  await assert.rejects(undoStageAll(root, { ...result, before: '--help' }), { status: 400 });
+});
+
+test('undoing stageAll in an unborn repository unstages the new files', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'difero-test-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  git(root, 'init', '-q');
+  await writeFile(join(root, 'first.txt'), 'first\n');
+  const result = await stageAll(root);
+  assert.equal((await getChanges(root, 'staged')).files.length, 1);
+  await undoStageAll(root, result);
+  assert.equal((await getChanges(root, 'staged')).files.length, 0);
 });

@@ -85,6 +85,65 @@ export async function countChanges(root) {
   return count;
 }
 
+const TREE_ID = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
+
+async function indexTree(root) {
+  const tree = await git(root, ['write-tree'], { encoding: 'utf8', allowMissing: true });
+  return tree?.trim() || null;
+}
+
+export async function stageAll(root) {
+  const [before, intentToAdd] = await Promise.all([
+    indexTree(root),
+    git(root, ['diff', '--name-only', '-z', '--diff-filter=A', '--no-ext-diff']),
+  ]);
+  await git(root, ['add', '.']);
+  const after = await indexTree(root);
+  return { before, after, intentToAdd: paths(intentToAdd), changed: before !== after };
+}
+
+export async function undoStageAll(root, { before, after, intentToAdd = [] }) {
+  if (
+    !TREE_ID.test(before) ||
+    !TREE_ID.test(after) ||
+    !Array.isArray(intentToAdd) ||
+    !intentToAdd.every((path) => typeof path === 'string')
+  ) {
+    throw Object.assign(new Error('Invalid index snapshot'), { status: 400 });
+  }
+  if ((await indexTree(root)) !== after) {
+    throw Object.assign(new Error('The index changed since staging'), { status: 409 });
+  }
+  const changed = await git(root, [
+    'diff-tree',
+    '-r',
+    '-z',
+    '--name-only',
+    '--no-renames',
+    before,
+    after,
+  ]);
+  if (!changed.length) return;
+  await gitWithInput(
+    root,
+    ['--literal-pathspecs', 'reset', '-q', before, '--pathspec-from-file=-', '--pathspec-file-nul'],
+    changed,
+  );
+  const present = await mapLimit(intentToAdd, 8, (path) =>
+    lstat(join(root, path)).then(
+      () => path,
+      () => null,
+    ),
+  );
+  const restored = present.filter(Boolean);
+  if (!restored.length) return;
+  await gitWithInput(
+    root,
+    ['--literal-pathspecs', 'add', '-N', '--pathspec-from-file=-', '--pathspec-file-nul'],
+    restored.map((path) => `${path}\0`).join(''),
+  );
+}
+
 export async function getBaseBranches(root) {
   const output = await git(
     root,
@@ -157,34 +216,39 @@ function diffEntries(buffer) {
   return entries;
 }
 
-function blobSizes(root, ids) {
-  const unique = [...new Set(ids.filter(Boolean))];
-  if (!unique.length) return Promise.resolve(new Map());
+function gitWithInput(root, args, input) {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      'git',
-      ['-C', root, 'cat-file', '--batch-check=%(objectname) %(objecttype) %(objectsize)'],
-      { windowsHide: true },
-    );
+    const child = spawn('git', ['-C', root, ...args], { windowsHide: true });
     let stdout = '';
     let stderr = '';
     child.stdout.setEncoding('utf8').on('data', (chunk) => (stdout += chunk));
     child.stderr.setEncoding('utf8').on('data', (chunk) => (stderr += chunk));
     child.on('error', reject);
     child.on('close', (code) => {
-      if (code !== 0) {
-        reject(new Error(`git cat-file failed: ${stderr.trim()}`));
-        return;
-      }
-      const sizes = new Map();
-      for (const line of stdout.split('\n')) {
-        const [id, type, size] = line.split(' ');
-        if (type === 'blob') sizes.set(id, Number(size));
-      }
-      resolve(sizes);
+      if (code === 0) resolve(stdout);
+      else
+        reject(
+          new Error(`git ${args.find((arg) => !arg.startsWith('-'))} failed: ${stderr.trim()}`),
+        );
     });
-    child.stdin.end(unique.map((id) => `${id}\n`).join(''));
+    child.stdin.end(input);
   });
+}
+
+async function blobSizes(root, ids) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return new Map();
+  const stdout = await gitWithInput(
+    root,
+    ['cat-file', '--batch-check=%(objectname) %(objecttype) %(objectsize)'],
+    unique.map((id) => `${id}\n`).join(''),
+  );
+  const sizes = new Map();
+  for (const line of stdout.split('\n')) {
+    const [id, type, size] = line.split(' ');
+    if (type === 'blob') sizes.set(id, Number(size));
+  }
+  return sizes;
 }
 
 async function blobFile(root, id, sizes, maxBytes) {

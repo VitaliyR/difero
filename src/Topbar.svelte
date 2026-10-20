@@ -3,6 +3,7 @@
   import Menu from './Menu.svelte';
   import menuIcon from './assets/menu.svg';
   import moreIcon from './assets/more.svg';
+  import stageIcon from './assets/stage.svg';
 
   let {
     root,
@@ -10,12 +11,14 @@
     base,
     branches,
     loading,
+    staging,
     commentCount,
     otherCommentCount,
     workspace,
     onModeChange,
     onBaseChange,
     onReload,
+    onStage,
     onCopy,
     onHelp,
     onToggleSidebar,
@@ -140,6 +143,16 @@
     <button
       type="button"
       class="icon-button"
+      aria-label="Stage all changes"
+      disabled={staging}
+      {@attach tooltip(`Stage all changes${workspace ? ' in this repo' : ''} (git add .)`)}
+      onclick={onStage}
+    >
+      <span class="mask-icon" style={`mask-image:url('${stageIcon}')`} aria-hidden="true"></span>
+    </button>
+    <button
+      type="button"
+      class="icon-button"
       class:loading
       aria-label="Reload changes"
       {@attach tooltip('Reload changes (R)')}
@@ -202,6 +215,17 @@
           </button>
         {/if}
         <hr />
+        <button
+          type="button"
+          role="menuitem"
+          disabled={staging}
+          onclick={() => {
+            close();
+            onStage();
+          }}
+        >
+          Stage all changes{workspace ? ' in repo' : ''}
+        </button>
         <button
           type="button"
           role="menuitem"
@@ -362,7 +386,11 @@
     display: block;
     line-height: 1;
   }
-  .icon-button:hover,
+  .icon-button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .icon-button:hover:not(:disabled),
   .mobile-actions :global(.actions-button:hover) {
     background: var(--surface-hover);
   }

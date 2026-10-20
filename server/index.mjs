@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { serveAsset } from './assets.mjs';
-import { countChanges, findRepo, findRepos, findRoot } from './git.mjs';
+import { countChanges, findRepo, findRepos, findRoot, stageAll, undoStageAll } from './git.mjs';
 import { createSnapshots, serveDiff, serveFile } from './routes/diff.mjs';
 import { serveImage } from './routes/image.mjs';
 
@@ -14,6 +14,28 @@ async function openWorkspace(cwd) {
   }
 }
 
+function isSameOrigin(request) {
+  return request.headers['sec-fetch-site'] === 'same-origin';
+}
+
+async function readJson(request) {
+  let body = '';
+  for await (const chunk of request.setEncoding('utf8')) body += chunk;
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw Object.assign(new Error('Invalid JSON body'), { status: 400 });
+  }
+}
+
+function sendJson(response, value) {
+  response.writeHead(200, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+  });
+  response.end(JSON.stringify(value));
+}
+
 async function serveRepos(response, { root, workspace }) {
   const repos = workspace
     ? await Promise.all(
@@ -24,11 +46,7 @@ async function serveRepos(response, { root, workspace }) {
         })),
       )
     : [];
-  response.writeHead(200, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store',
-  });
-  response.end(JSON.stringify({ workspace: workspace ? root : null, repos }));
+  sendJson(response, { workspace: workspace ? root : null, repos });
 }
 
 export async function startServer({ cwd, assetsDir, port = 0, fallbackToFreePort = false }) {
@@ -44,6 +62,21 @@ export async function startServer({ cwd, assetsDir, port = 0, fallbackToFreePort
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url, 'http://localhost');
+      if (request.method === 'POST' && url.pathname.startsWith('/api/stage')) {
+        if (!isSameOrigin(request)) {
+          response.writeHead(403).end('Forbidden');
+          return;
+        }
+        if (url.pathname === '/api/stage') {
+          sendJson(response, await stageAll(await repoRoot(url)));
+          return;
+        }
+        if (url.pathname === '/api/stage/undo') {
+          await undoStageAll(await repoRoot(url), await readJson(request));
+          response.writeHead(204).end();
+          return;
+        }
+      }
       if (request.method !== 'GET') {
         response.writeHead(405).end('Method not allowed');
         return;

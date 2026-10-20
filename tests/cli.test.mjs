@@ -285,6 +285,41 @@ test('a folder of repositories serves each one by name', async (t) => {
   }
 });
 
+test('staging all changes in a repository of a folder can be undone', async (t) => {
+  const parent = await mkdtemp(join(tmpdir(), 'difero-workspace-'));
+  t.after(() => rm(parent, { recursive: true, force: true }));
+  for (const name of ['api', 'web']) execFileSync('git', ['init', '-q', join(parent, name)]);
+  for (const name of ['api', 'web']) await writeFile(join(parent, name, 'new.txt'), 'new\n');
+
+  const { server } = await startServer({ cwd: parent, assetsDir: parent });
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (path, body) =>
+    fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: { 'sec-fetch-site': 'same-origin' },
+      body: body && JSON.stringify(body),
+    });
+  const staged = async (name) =>
+    (await (await fetch(`${base}/api/diff?mode=staged&repo=${name}`)).json()).files.length;
+
+  const crossSite = await fetch(`${base}/api/stage?repo=web`, {
+    method: 'POST',
+    headers: { 'sec-fetch-site': 'cross-site' },
+  });
+  assert.equal(crossSite.status, 403);
+  assert.equal(await staged('web'), 0);
+
+  const { changed, ...snapshot } = await (await post('/api/stage?repo=web')).json();
+  assert.equal(changed, true);
+  assert.equal(await staged('web'), 1);
+  assert.equal(await staged('api'), 0);
+
+  assert.equal((await post('/api/stage/undo?repo=web', snapshot)).status, 204);
+  assert.equal(await staged('web'), 0);
+  assert.equal((await post('/api/stage/undo?repo=web', snapshot)).status, 409);
+});
+
 test('a repository is served directly, without the repository list', async (t) => {
   const root = await makeRepo(t);
   execFileSync('git', ['init', '-q', join(root, 'nested')]);

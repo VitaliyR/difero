@@ -114,12 +114,14 @@
   base={review.base}
   branches={review.branches}
   loading={review.loading}
+  staging={review.staging}
   workspace={Boolean(review.workspace)}
   commentCount={review.comments.length}
   otherCommentCount={review.otherComments.reduce((sum, { comments }) => sum + comments.length, 0)}
   onModeChange={(mode) => review.setMode(mode)}
   onBaseChange={(base) => review.setBase(base)}
   onReload={() => review.reload()}
+  onStage={() => review.stageAll()}
   onCopy={(options) => review.copyComments(options)}
   onHelp={() => (shortcutsOpen = true)}
   onToggleSidebar={() => (sidebarOpen = !sidebarOpen)}

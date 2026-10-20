@@ -38,6 +38,7 @@ export class ReviewState {
   otherComments = $state.raw([]);
   draft = $state.raw(null);
   loading = $state(false);
+  staging = $state(false);
   loaded = $state(false);
   activeFile = $state(null);
   search = $state('');
@@ -379,6 +380,47 @@ export class ReviewState {
       }
     } catch {
       this.toast('Clipboard access failed. Check browser permissions.');
+    }
+  }
+
+  async stageAll() {
+    if (this.staging || (this.workspace && !this.repo)) return;
+    const repo = this.repo;
+    const params = new URLSearchParams(this.workspace ? { repo } : {});
+    this.staging = true;
+    try {
+      const response = await fetch(`/api/stage?${params}`, { method: 'POST' });
+      if (!response.ok) throw new Error(await response.text());
+      const { changed, ...snapshot } = await response.json();
+      const where = this.workspace ? ` in ${repo}` : '';
+      if (!changed) this.toast(`Nothing to stage${where}`);
+      else if (!snapshot.before || !snapshot.after) this.toast(`Staged all changes${where}`);
+      else {
+        this.toast(`Staged all changes${where}`, {
+          label: 'Undo',
+          run: () => this.undoStageAll(params, snapshot),
+        });
+      }
+      if (changed) this.reload();
+    } catch (error) {
+      this.toast(`Could not stage changes: ${error.message}`);
+    } finally {
+      this.staging = false;
+    }
+  }
+
+  async undoStageAll(params, snapshot) {
+    try {
+      const response = await fetch(`/api/stage/undo?${params}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(snapshot),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      this.toast('Staging undone');
+      this.reload();
+    } catch (error) {
+      this.toast(`Could not undo staging: ${error.message}`);
     }
   }
 
