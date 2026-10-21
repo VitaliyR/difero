@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.0](https://github.com/VitaliyR/difero/compare/difero-v1.3.0...difero-v1.4.0) (2026-10-21)
+
+
+### Features
+
+* expand all lines. Show folder name in multirepo. Split diff view ([78cf1ba](https://github.com/VitaliyR/difero/commit/78cf1bae02c9cfa01c5e6f56fc7db356393c4d8c))
+* git add button ([2e47c2e](https://github.com/VitaliyR/difero/commit/2e47c2e3ede188a1b7b725aeeb583c5a7a2209e2))
+* reworked copy comments button. Include multirepo support ([e2979ee](https://github.com/VitaliyR/difero/commit/e2979ee6eec40a21b9fe738fe6eb0df6e0fcbe4b))
+
 ## [1.3.0](https://github.com/VitaliyR/difero/compare/difero-v1.2.0...difero-v1.3.0) (2026-10-19)
 
 
