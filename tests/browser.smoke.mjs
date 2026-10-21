@@ -10,6 +10,15 @@ import { startServer } from '../server/index.mjs';
 
 const assetsDir = fileURLToPath(new URL('../dist/', import.meta.url));
 
+// t.after hooks run in registration order, so the server closes while the
+// browser is still connected; drop its sockets or close() waits on them forever.
+function closeServer(server) {
+  return new Promise((resolve) => {
+    server.close(resolve);
+    server.closeAllConnections();
+  });
+}
+
 function git(root, ...args) {
   execFileSync('git', ['-C', root, ...args], { stdio: 'pipe' });
 }
@@ -27,7 +36,7 @@ test('long diff lines remain horizontally scrollable', async (t) => {
   await writeFile(join(root, 'long.txt'), `${'b'.repeat(600)}\n`);
 
   const { server, url } = await startServer({ cwd: root, assetsDir });
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  t.after(() => closeServer(server));
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
   const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
@@ -61,7 +70,7 @@ test('base branch selector reviews committed changes against a chosen branch', a
   git(root, 'commit', '-qam', 'feature');
 
   const { server, url } = await startServer({ cwd: root, assetsDir });
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  t.after(() => closeServer(server));
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -90,7 +99,7 @@ test('browser review flow: tree, navigation, resize, comments, and shortcuts', a
   await writeFile(join(root, 'src/fresh.js'), 'const fresh = true;\nconst second = 2;\n');
 
   const { server, url } = await startServer({ cwd: join(root, 'src'), assetsDir });
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  t.after(() => closeServer(server));
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
   const context = await browser.newContext({
@@ -430,7 +439,7 @@ test('a review whose snapshot expired reloads instead of failing', async (t) => 
   await writeFile(join(root, 'large.js'), 'const value = 1;\n'.repeat(501));
 
   const { server, url } = await startServer({ cwd: root, assetsDir });
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  t.after(() => closeServer(server));
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -467,7 +476,7 @@ test('clicking a separator bar reveals 30 lines next to the change', async (t) =
   await writeFile(join(root, 'file.txt'), `${lines.join('\n')}\n`);
 
   const { server, url } = await startServer({ cwd: root, assetsDir });
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  t.after(() => closeServer(server));
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
   const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
@@ -495,7 +504,7 @@ test('a folder of repositories switches between them from the sidebar', async (t
   }
 
   const { server, url } = await startServer({ cwd: parent, assetsDir });
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  t.after(() => closeServer(server));
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -559,7 +568,7 @@ test('copying comments in a folder of repositories includes every repository', a
   }
 
   const { server, url } = await startServer({ cwd: parent, assetsDir });
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  t.after(() => closeServer(server));
   const browser = await chromium.launch({ headless: true });
   t.after(() => browser.close());
   const context = await browser.newContext({
