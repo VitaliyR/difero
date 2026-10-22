@@ -44,6 +44,11 @@
   background: var(--bg);
   font-synthesis: none;
 }
+@media (max-width: 760px) {
+  :root {
+    --diff-style-dock-space: 52px;
+  }
+}
 * {
   box-sizing: border-box;
 }

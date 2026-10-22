@@ -1,10 +1,17 @@
 <script>
+  import { tooltip } from './tooltip.js';
+  import splitIcon from './assets/split.svg';
+  import unifiedIcon from './assets/unified.svg';
+
   let { value, onChange } = $props();
 
   const styles = [
-    { id: 'unified', label: 'Unified' },
-    { id: 'split', label: 'Split' },
+    { id: 'unified', label: 'Unified', icon: unifiedIcon },
+    { id: 'split', label: 'Split', icon: splitIcon },
   ];
+
+  let current = $derived(styles.find((style) => style.id === value) ?? styles[0]);
+  let next = $derived(styles.find((style) => style.id !== current.id));
 </script>
 
 <div class="diff-style-toggle" role="group" aria-label="Diff layout">
@@ -19,6 +26,15 @@
     </button>
   {/each}
 </div>
+<button
+  type="button"
+  class="diff-style-icon-toggle"
+  aria-label={`${current.label} view, switch to ${next.label.toLowerCase()}`}
+  {@attach tooltip(`Switch to ${next.label.toLowerCase()} view`)}
+  onclick={() => onChange(next.id)}
+>
+  <span class="mask-icon" style={`mask-image:url('${current.icon}')`} aria-hidden="true"></span>
+</button>
 
 <style>
   .diff-style-toggle {
@@ -46,5 +62,33 @@
   button.active {
     background: var(--accent-bg);
     color: var(--accent-text);
+  }
+  .diff-style-icon-toggle {
+    display: none;
+    flex: none;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--accent-text);
+  }
+  .mask-icon {
+    width: 18px;
+    height: 18px;
+    background: currentColor;
+    mask-position: center;
+    mask-size: contain;
+    mask-repeat: no-repeat;
+  }
+  @media (max-width: 760px) {
+    .diff-style-toggle {
+      display: none;
+    }
+    .diff-style-icon-toggle {
+      display: grid;
+    }
   }
 </style>

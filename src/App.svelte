@@ -318,7 +318,7 @@
       min-height: calc(100dvh - 52px);
     }
     .content {
-      padding: 22px 11px 60px;
+      padding: 22px 2px 60px;
     }
   }
 </style>

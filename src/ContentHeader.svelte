@@ -62,5 +62,8 @@
     .diff-style-dock {
       top: 59px;
     }
+    .content-intro {
+      padding: 0 9px;
+    }
   }
 </style>
