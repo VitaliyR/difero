@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.5.0](https://github.com/VitaliyR/difero/compare/difero-v1.4.0...difero-v1.5.0) (2026-10-22)
+
+
+### Features
+
+* fix safari jumpness. Move split unified buttons when scroll ([2964290](https://github.com/VitaliyR/difero/commit/2964290c5e1d3219fbbce83321c07a45ed1fd49a))
+* keep split and unified visible on the page when scroll ([47b9412](https://github.com/VitaliyR/difero/commit/47b941282f4466abd9fa838521ceeb64986d7a0f))
+* mobile view for unified and split ([6be3d65](https://github.com/VitaliyR/difero/commit/6be3d65b406c20d0850327db62b310a612608fcd))
+* reveal file or copy location ([b61a2bc](https://github.com/VitaliyR/difero/commit/b61a2bc78fa23918bfbe94251264e15898c97557))
+* watch files and notify about update ([6671ea1](https://github.com/VitaliyR/difero/commit/6671ea154cca673024d3b80d887d4162073facd4))
+
 ## [1.4.0](https://github.com/VitaliyR/difero/compare/difero-v1.3.0...difero-v1.4.0) (2026-10-21)
 
 
