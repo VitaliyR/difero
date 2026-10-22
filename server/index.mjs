@@ -4,6 +4,7 @@ import { countChanges, findRepo, findRepos, findRoot, stageAll, undoStageAll } f
 import { createSnapshots, serveDiff, serveFile } from './routes/diff.mjs';
 import { createEvents } from './routes/events.mjs';
 import { serveImage } from './routes/image.mjs';
+import { canReveal, revealFile } from './reveal.mjs';
 
 async function openWorkspace(cwd) {
   try {
@@ -37,7 +38,7 @@ function sendJson(response, value) {
   response.end(JSON.stringify(value));
 }
 
-async function serveRepos(response, { root, workspace }) {
+async function serveRepos(response, { root, workspace, reveal }) {
   const repos = workspace
     ? await Promise.all(
         (await findRepos(root)).map(async ({ name, path }) => ({
@@ -47,10 +48,16 @@ async function serveRepos(response, { root, workspace }) {
         })),
       )
     : [];
-  sendJson(response, { workspace: workspace ? root : null, repos });
+  sendJson(response, { workspace: workspace ? root : null, repos, reveal });
 }
 
-export async function startServer({ cwd, assetsDir, port = 0, fallbackToFreePort = false }) {
+export async function startServer({
+  cwd,
+  assetsDir,
+  port = 0,
+  fallbackToFreePort = false,
+  reveal = canReveal(),
+}) {
   const { root, repos } = await openWorkspace(cwd);
   const workspace = Boolean(repos);
   const snapshots = createSnapshots();
@@ -79,12 +86,21 @@ export async function startServer({ cwd, assetsDir, port = 0, fallbackToFreePort
           return;
         }
       }
+      if (request.method === 'POST' && url.pathname === '/api/reveal') {
+        if (!reveal || !isSameOrigin(request)) {
+          response.writeHead(403).end('Forbidden');
+          return;
+        }
+        await revealFile(await repoRoot(url), url.searchParams.get('path'));
+        response.writeHead(204).end();
+        return;
+      }
       if (request.method !== 'GET') {
         response.writeHead(405).end('Method not allowed');
         return;
       }
       if (url.pathname === '/api/repos') {
-        await serveRepos(response, { root, workspace });
+        await serveRepos(response, { root, workspace, reveal });
         return;
       }
       if (url.pathname === '/api/diff') {

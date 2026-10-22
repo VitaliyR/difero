@@ -17,6 +17,7 @@ const IMAGE_MIME = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
 };
+const PREVIEW_MIME = { ...IMAGE_MIME, '.svg': 'image/svg+xml' };
 
 async function git(root, args, options = {}) {
   try {
@@ -495,7 +496,7 @@ export async function getChanges(root, mode = 'all', base = null) {
 export async function getImage(root, mode, path, side, base = null) {
   if (!['all', 'base', 'staged', 'unstaged'].includes(mode) || !['old', 'new'].includes(side))
     return null;
-  const mime = typeof path === 'string' ? IMAGE_MIME[extname(path).toLowerCase()] : null;
+  const mime = typeof path === 'string' ? PREVIEW_MIME[extname(path).toLowerCase()] : null;
   if (!mime) return null;
   if (mode === 'base' && !(await getBaseBranches(root)).branches.length) return null;
   const comparison = mode === 'base' ? (await baseCommit(root, base)).commit : null;

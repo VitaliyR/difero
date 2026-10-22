@@ -9,6 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { startServer } from '../server/index.mjs';
+import { canReveal } from '../server/reveal.mjs';
 
 const cli = fileURLToPath(new URL('../bin/difero.mjs', import.meta.url));
 const { version } = JSON.parse(
@@ -323,11 +324,15 @@ test('staging all changes in a repository of a folder can be undone', async (t) 
 test('a repository is served directly, without the repository list', async (t) => {
   const root = await makeRepo(t);
   execFileSync('git', ['init', '-q', join(root, 'nested')]);
-  const { server, repos } = await startServer({ cwd: root, assetsDir: root });
+  const { server, repos } = await startServer({ cwd: root, assetsDir: root, reveal: false });
   t.after(() => server.close());
   assert.equal(repos, null);
   const base = `http://127.0.0.1:${server.address().port}`;
-  assert.deepEqual(await (await fetch(`${base}/api/repos`)).json(), { workspace: null, repos: [] });
+  assert.deepEqual(await (await fetch(`${base}/api/repos`)).json(), {
+    workspace: null,
+    repos: [],
+    reveal: false,
+  });
 });
 
 test('a folder without repositories fails to start', async (t) => {
@@ -376,4 +381,43 @@ test('the events stream reports a new version when files change', async (t) => {
   await waitFor(2);
   assert.notEqual(versions[1], version);
   assert.equal((await (await fetch(`${base}/api/diff?mode=all`)).json()).version, versions[1]);
+});
+
+test('reveal is refused when disabled, cross-origin, or outside the repository', async (t) => {
+  const root = await makeRepo(t);
+  await writeFile(join(root, 'file.txt'), 'hello\n');
+  const disabled = await startServer({ cwd: root, assetsDir: root, reveal: false });
+  t.after(() => disabled.server.close());
+  const sameOrigin = { method: 'POST', headers: { 'sec-fetch-site': 'same-origin' } };
+  assert.equal((await fetch(`${disabled.url}api/reveal?path=file.txt`, sameOrigin)).status, 403);
+
+  const enabled = await startServer({ cwd: root, assetsDir: root, reveal: true });
+  t.after(() => enabled.server.close());
+  const crossSite = { method: 'POST', headers: { 'sec-fetch-site': 'cross-site' } };
+  assert.equal((await fetch(`${enabled.url}api/reveal?path=file.txt`, crossSite)).status, 403);
+  assert.equal((await fetch(`${enabled.url}api/reveal?path=../x`, sameOrigin)).status, 400);
+  assert.equal((await fetch(`${enabled.url}api/reveal?path=missing.txt`, sameOrigin)).status, 404);
+});
+
+test('canReveal is off over SSH and on headless Linux', () => {
+  assert.equal(canReveal({ SSH_CONNECTION: '1 2 3 4' }, 'darwin'), false);
+  assert.equal(canReveal({}, 'darwin'), true);
+  assert.equal(canReveal({}, 'win32'), true);
+  assert.equal(canReveal({}, 'linux'), false);
+  assert.equal(canReveal({ WAYLAND_DISPLAY: 'wayland-0' }, 'linux'), true);
+});
+
+test('svg files stay as code and can be previewed as a sandboxed image', async (t) => {
+  const root = await makeRepo(t);
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>\n';
+  await writeFile(join(root, 'icon.svg'), svg);
+  const { server, url } = await startServer({ cwd: root, assetsDir: root, reveal: false });
+  t.after(() => server.close());
+  const { files } = await (await fetch(`${url}api/diff`)).json();
+  assert.equal(files[0].imageMime, null);
+  assert.equal(files[0].binary, false);
+  const image = await fetch(`${url}api/image?mode=all&path=icon.svg&side=new`);
+  assert.equal(image.headers.get('content-type'), 'image/svg+xml');
+  assert.match(image.headers.get('content-security-policy'), /sandbox/);
+  assert.equal(await image.text(), svg);
 });

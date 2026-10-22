@@ -16,6 +16,8 @@ export async function serveImage(response, url, { root }) {
     'content-type': image.mime,
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
+    'content-security-policy':
+      "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox",
   });
   response.end(image.bytes);
 }

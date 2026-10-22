@@ -171,7 +171,10 @@
           collapsed={review.isFileCollapsed(file)}
           comments={review.commentsFor(file.path)}
           draft={review.draftFor(file.path)}
+          canReveal={review.canReveal}
           loadDiff={(file) => review.loadDiff(file)}
+          onReveal={(path) => review.revealFile(path)}
+          onCopyPath={(path) => review.copyPath(path)}
           onToggle={(file) => review.toggleFile(file)}
           onBegin={(path, line, side) => review.beginComment(path, line, side)}
           onCancel={() => (review.draft = null)}

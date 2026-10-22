@@ -4,8 +4,13 @@
   import { createDiff } from './pierre.js';
   import { scheduleRender } from './renderScheduler.js';
   import { stuck } from './attachments/stuck.js';
+  import { tooltip } from './tooltip.js';
+  import { modifierKeys } from './modifierKeys.svelte.js';
+  import copyIcon from './assets/copy.svg';
+  import folderIcon from './assets/folder.svg';
 
   const trackStuck = !CSS.supports('container-type', 'scroll-state');
+  const altKeyName = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌥' : 'Alt+';
 
   let {
     file,
@@ -15,10 +20,13 @@
     base,
     repo,
     collapsed,
+    canReveal,
     comments,
     draft,
     loadDiff,
     onToggle,
+    onReveal,
+    onCopyPath,
     onBegin,
     onCancel,
     onAdd,
@@ -29,6 +37,13 @@
   function imageUrl(side) {
     return `/api/image?${new URLSearchParams({ mode, path: file.path, side, ...(base ? { base } : {}), ...(repo ? { repo } : {}) })}`;
   }
+
+  let isSvg = $derived(file.path.toLowerCase().endsWith('.svg') && !file.binary && !file.tooLarge);
+  let svgView = $state('code');
+  let showPreview = $derived(Boolean(file.imageMime) || (isSvg && svgView === 'preview'));
+
+  let revealable = $derived(canReveal && file.newExists);
+  let copiesPath = $derived(!revealable || modifierKeys.alt);
 
   let card;
   let headingStuck = $state(false);
@@ -148,12 +163,44 @@
         </span>
       {/if}
     </button>
+    <div class="card-actions">
+      {#if isSvg && !collapsed}
+        <div class="view-toggle" role="group" aria-label={`${file.path} view`}>
+          {#each ['code', 'preview'] as view (view)}
+            <button
+              type="button"
+              class:active={svgView === view}
+              aria-pressed={svgView === view}
+              onclick={() => (svgView = view)}
+            >
+              {view === 'code' ? 'Code' : 'Preview'}
+            </button>
+          {/each}
+        </div>
+      {/if}
+      <button
+        type="button"
+        class="path-button"
+        aria-label={copiesPath ? `Copy full path of ${file.path}` : `Show ${file.path} in folder`}
+        {@attach tooltip(
+          copiesPath ? 'Copy full path' : `Show in folder (${altKeyName}click to copy full path)`,
+        )}
+        onclick={(event) =>
+          revealable && !event.altKey ? onReveal(file.path) : onCopyPath(file.path)}
+      >
+        <span
+          class="mask-icon"
+          style={`mask-image:url('${copiesPath ? copyIcon : folderIcon}')`}
+          aria-hidden="true"
+        ></span>
+      </button>
+    </div>
   </div>
   {#if !collapsed}
     {#if modeChanged}
       <div class="mode-change">File mode changed: {file.oldMode} → {file.newMode}</div>
     {/if}
-    {#if file.imageMime}
+    {#if showPreview}
       <div class="image-previews" class:single-image={file.oldExists !== file.newExists}>
         {#if file.oldExists}
           <figure class="image-preview">
@@ -268,20 +315,87 @@
     text-align: left;
     color: inherit;
   }
-  .diff-card-heading.stuck .diff-card-toggle {
+  .diff-card-heading.stuck > :last-child {
     padding-right: var(--diff-style-dock-space);
+  }
+  .diff-card-heading.stuck > .card-actions {
+    padding-right: var(--actions-dock-space);
   }
   @supports (container-type: scroll-state) {
     .diff-card-heading {
       container-type: scroll-state;
     }
     @container scroll-state(stuck: top) {
-      .diff-card-toggle {
+      .diff-card-heading > :last-child {
         padding-right: var(--diff-style-dock-space);
+      }
+      .diff-card-heading > .card-actions {
+        padding-right: var(--actions-dock-space);
       }
     }
   }
-  .diff-card-toggle:hover {
+  .diff-card-heading {
+    --actions-dock-space: calc(var(--diff-style-dock-space) - 16px);
+  }
+  .diff-card-toggle:has(+ .card-actions) {
+    padding-right: 10px;
+  }
+  .card-actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-right: 8px;
+  }
+  .view-toggle {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .view-toggle button {
+    border: 0;
+    border-radius: 6px;
+    padding: 2px 8px;
+    background: transparent;
+    color: var(--text-subtle);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .view-toggle button:hover {
+    background: var(--surface-control);
+    color: var(--text);
+  }
+  .view-toggle button.active {
+    background: var(--accent-bg);
+    color: var(--accent-text);
+  }
+  .path-button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-subtle);
+  }
+  .path-button:hover {
+    background: var(--surface-control);
+    color: var(--text);
+  }
+  .mask-icon {
+    width: 16px;
+    height: 16px;
+    background: currentColor;
+    mask-position: center;
+    mask-size: contain;
+    mask-repeat: no-repeat;
+  }
+  .diff-card-heading:hover {
     background: var(--surface-control);
   }
   .card-chevron {
@@ -349,6 +463,7 @@
     }
     .diff-card-heading {
       top: 52px;
+      --actions-dock-space: calc(var(--diff-style-dock-space) - 6px);
     }
   }
   .mode-change {

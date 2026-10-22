@@ -54,23 +54,31 @@ export function tooltip(text) {
       showTimer = setTimeout(show, 300);
     }
 
+    function onFocus() {
+      if (node.matches(':focus-visible')) show();
+    }
+
     function onKeyDown(event) {
       if (event.key === 'Escape') hide();
     }
 
     node.addEventListener('pointerenter', onEnter);
     node.addEventListener('pointerleave', hide);
-    node.addEventListener('focus', show);
+    node.addEventListener('pointerdown', hide);
+    node.addEventListener('focus', onFocus);
     node.addEventListener('blur', hide);
     node.addEventListener('keydown', onKeyDown);
+    window.addEventListener('blur', hide);
 
     return () => {
       hide();
       node.removeEventListener('pointerenter', onEnter);
       node.removeEventListener('pointerleave', hide);
-      node.removeEventListener('focus', show);
+      node.removeEventListener('pointerdown', hide);
+      node.removeEventListener('focus', onFocus);
       node.removeEventListener('blur', hide);
       node.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('blur', hide);
     };
   };
 }

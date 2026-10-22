@@ -1,5 +1,6 @@
 <script>
   import { tooltip } from './tooltip.js';
+  import { modifierKeys } from './modifierKeys.svelte.js';
   import Menu from './Menu.svelte';
   import menuIcon from './assets/menu.svg';
   import moreIcon from './assets/more.svg';
@@ -34,28 +35,9 @@
   let repoName = $derived(root.split('/').at(-1));
   let modeLabel = $derived(modes.find((tab) => tab.id === mode)?.label);
 
-  let altKey = $state(false);
-  let shiftKey = $state(false);
-  let repoOnly = $derived(workspace && shiftKey);
+  let repoOnly = $derived(workspace && modifierKeys.shift);
   let copyCount = $derived(commentCount + (repoOnly ? 0 : otherCommentCount));
-
-  function syncModifiers(event) {
-    altKey = event.altKey;
-    shiftKey = event.shiftKey;
-  }
-
-  function resetModifiers() {
-    altKey = false;
-    shiftKey = false;
-  }
 </script>
-
-<svelte:window
-  onkeydown={syncModifiers}
-  onkeyup={syncModifiers}
-  onpointermove={syncModifiers}
-  onblur={resetModifiers}
-/>
 
 <header id="topbar" class="topbar">
   <button
@@ -128,7 +110,7 @@
     <button
       type="button"
       class="copy-button"
-      class:copy-only={altKey}
+      class:copy-only={modifierKeys.alt}
       disabled={!copyCount}
       {@attach tooltip(
         `Click or C — copy & clear\nAlt — keep comments${workspace ? '\nShift — this repo only' : ''}`,
@@ -136,7 +118,7 @@
       onclick={(event) => onCopy({ clear: !event.altKey, scope: event.shiftKey ? 'repo' : 'all' })}
     >
       Copy
-      {#if !altKey}<span class="copy-clear">& clear</span>{/if}
+      {#if !modifierKeys.alt}<span class="copy-clear">& clear</span>{/if}
       {#if workspace}<span class="copy-scope">{repoOnly ? 'repo' : 'all'}</span>{/if}
       <span class="copy-suffix">comments</span>
       {copyCount ? `  ·  ${copyCount}` : ''}

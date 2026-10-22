@@ -33,6 +33,7 @@ export class ReviewState {
   root = $state('');
   workspace = $state('');
   repos = $state.raw([]);
+  canReveal = $state(false);
   repo = $state(initialRepo || '');
   loadedRepo = $state('');
   diffStyle = $state(initialDiffStyle);
@@ -223,6 +224,7 @@ export class ReviewState {
       const result = await response.json();
       this.workspace = result.workspace || '';
       this.repos = result.repos;
+      this.canReveal = Boolean(result.reveal);
       this.loadOtherComments();
     } catch (error) {
       this.toast(`Could not load repositories: ${error.message}`);
@@ -442,6 +444,26 @@ export class ReviewState {
       this.toast(`Could not stage changes: ${error.message}`);
     } finally {
       this.staging = false;
+    }
+  }
+
+  async revealFile(path) {
+    const params = new URLSearchParams({ path, ...(this.workspace ? { repo: this.repo } : {}) });
+    try {
+      const response = await fetch(`/api/reveal?${params}`, { method: 'POST' });
+      if (!response.ok) throw new Error(await response.text());
+    } catch (error) {
+      this.toast(`Could not reveal ${path}: ${error.message}`);
+    }
+  }
+
+  async copyPath(path) {
+    const fullPath = `${this.root}/${path}`;
+    try {
+      await navigator.clipboard.writeText(fullPath);
+      this.toast(`Copied ${fullPath}`);
+    } catch {
+      this.toast('Clipboard access failed. Check browser permissions.');
     }
   }
 
