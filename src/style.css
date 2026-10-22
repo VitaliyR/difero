@@ -29,6 +29,8 @@
   /* Elevation */
   --shadow: #0006;
   --overlay: #080a10bf;
+  /* Room reserved for the sticky Unified/Split toggle */
+  --diff-style-dock-space: 150px;
 
   font-family:
     Inter,

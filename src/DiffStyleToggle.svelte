@@ -23,7 +23,6 @@
 <style>
   .diff-style-toggle {
     flex: none;
-    margin-left: auto;
     display: flex;
     gap: 2px;
     padding: 2px;

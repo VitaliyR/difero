@@ -3,6 +3,9 @@
   import { estimatedHeight, fileId, hasSameContents, isRenderable } from './review.js';
   import { createDiff } from './pierre.js';
   import { scheduleRender } from './renderScheduler.js';
+  import { stuck } from './attachments/stuck.js';
+
+  const trackStuck = !CSS.supports('container-type', 'scroll-state');
 
   let {
     file,
@@ -28,6 +31,7 @@
   }
 
   let card;
+  let headingStuck = $state(false);
   let container = $state(null);
   let metadata = $state.raw(null);
   let instance = $state.raw(null);
@@ -120,7 +124,11 @@
 </script>
 
 <article id={fileId(file.path)} class="diff-card" class:collapsed bind:this={card}>
-  <div class="diff-card-heading">
+  <div
+    class="diff-card-heading"
+    class:stuck={headingStuck}
+    {@attach trackStuck && stuck((value) => (headingStuck = value))}
+  >
     <button
       type="button"
       class="diff-card-toggle"
@@ -259,6 +267,19 @@
     background: transparent;
     text-align: left;
     color: inherit;
+  }
+  .diff-card-heading.stuck .diff-card-toggle {
+    padding-right: var(--diff-style-dock-space);
+  }
+  @supports (container-type: scroll-state) {
+    .diff-card-heading {
+      container-type: scroll-state;
+    }
+    @container scroll-state(stuck: top) {
+      .diff-card-toggle {
+        padding-right: var(--diff-style-dock-space);
+      }
+    }
   }
   .diff-card-toggle:hover {
     background: var(--surface-control);
