@@ -56,7 +56,11 @@ export function createDiff({
   onDelete,
 }) {
   const mounted = [];
-  const gutterMounted = [];
+  // Not the library's gutter utility: its slotted button makes Safari jump while scrolling.
+  const gutterHost = document.createElement('span');
+  gutterHost.style.display = 'contents';
+  let gutterButton = null;
+  let hoveredLine = null;
 
   function renderAnnotation(annotation) {
     const draft = annotation.metadata.kind === 'draft' ? getDraft() : null;
@@ -80,7 +84,6 @@ export function createDiff({
     disableFileHeader: true,
     hunkSeparators: 'line-info',
     expansionLineCount: 30,
-    enableGutterUtility: true,
     lineHoverHighlight: 'both',
     // The library's overscroll-behavior-x: none makes Chrome latch any wheel
     // gesture that starts with a horizontal component to the code block, which
@@ -112,16 +115,16 @@ export function createDiff({
         grid-row: 1 / -1;
       }
     `,
-    renderGutterUtility(getHoveredLine) {
-      const host = document.createElement('span');
-      gutterMounted.push(
-        mount(GutterCommentButton, {
-          target: host,
-          props: { path: file.path, getHoveredLine, onBegin },
-        }),
-      );
-      flushSync();
-      return host;
+    onLineEnter({ numberElement, lineNumber, annotationSide }) {
+      hoveredLine = { lineNumber, side: annotationSide };
+      numberElement.append(gutterHost);
+      gutterButton ??= mount(GutterCommentButton, {
+        target: gutterHost,
+        props: { path: file.path, getHoveredLine: () => hoveredLine, onBegin },
+      });
+    },
+    onLineLeave() {
+      gutterHost.remove();
     },
     onLineNumberClick({ lineNumber, annotationSide }) {
       onBegin(file.path, lineNumber, annotationSide);
@@ -169,7 +172,7 @@ export function createDiff({
     cleanUp() {
       clearAnnotations();
       container.removeEventListener('click', expandFromSeparator, true);
-      for (const component of gutterMounted) unmount(component);
+      if (gutterButton) unmount(gutterButton);
       instance.cleanUp();
     },
   };

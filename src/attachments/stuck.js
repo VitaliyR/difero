@@ -6,7 +6,9 @@ export function stuck(onChange) {
     const observer = new IntersectionObserver(
       ([entry]) =>
         onChange(
-          entry.intersectionRatio < 1 && entry.boundingClientRect.top < entry.rootBounds.top,
+          entry.isIntersecting &&
+            entry.intersectionRatio < 1 &&
+            entry.boundingClientRect.top < entry.rootBounds.top,
         ),
       { rootMargin: `-${top}px 0px 0px 0px`, threshold: [0, 1] },
     );

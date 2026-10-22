@@ -499,7 +499,7 @@ export class ReviewState {
   }
 
   isFileCollapsed(file) {
-    return this.collapsedFiles[file.path] ?? file.lines > LARGE_FILE_LINES;
+    return this.collapsedFiles[file.path] ?? file.additions + file.deletions > LARGE_FILE_LINES;
   }
 
   async toggleFile(file) {

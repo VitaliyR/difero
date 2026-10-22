@@ -1,10 +1,13 @@
+<svelte:options css="injected" />
+
 <script>
   import plusIcon from './assets/plus.svg';
   import { tooltip } from './tooltip.js';
 
   let { path, getHoveredLine, onBegin } = $props();
 
-  function begin() {
+  function begin(event) {
+    event.stopPropagation();
     const hovered = getHoveredLine();
     onBegin(path, hovered.lineNumber, hovered.side);
   }
@@ -23,6 +26,10 @@
 
 <style>
   .gutter-comment-button {
+    position: absolute;
+    top: calc(50% - 9px);
+    right: 0;
+    z-index: 4;
     display: grid;
     place-items: center;
     width: 18px;
@@ -32,6 +39,8 @@
     border-radius: 4px;
     background: var(--accent);
     color: var(--text);
+    /* Rendered in the diff's shadow root, out of reach of the global button rule. */
+    cursor: pointer;
   }
   .gutter-comment-button:hover {
     background: var(--accent-hover);

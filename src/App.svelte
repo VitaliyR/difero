@@ -55,6 +55,8 @@
     if (event.key === '3') review.setMode('unstaged');
     if (event.key === '4') review.setMode('base');
     if (event.key.toLowerCase() === 'r') review.reload();
+    if (event.key.toLowerCase() === 's')
+      review.setDiffStyle(review.diffStyle === 'split' ? 'unified' : 'split');
     if (event.key.toLowerCase() === 'j') review.moveFile(1);
     if (event.key.toLowerCase() === 'k') review.moveFile(-1);
   }

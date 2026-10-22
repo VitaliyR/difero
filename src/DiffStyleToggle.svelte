@@ -30,7 +30,7 @@
   type="button"
   class="diff-style-icon-toggle"
   aria-label={`${current.label} view, switch to ${next.label.toLowerCase()}`}
-  {@attach tooltip(`Switch to ${next.label.toLowerCase()} view`)}
+  {@attach tooltip(`Switch to ${next.label.toLowerCase()} view (S)`)}
   onclick={() => onChange(next.id)}
 >
   <span class="mask-icon" style={`mask-image:url('${current.icon}')`} aria-hidden="true"></span>

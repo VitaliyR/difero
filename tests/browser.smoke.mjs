@@ -309,7 +309,7 @@ test('browser review flow: tree, navigation, resize, comments, and shortcuts', a
   await page.getByRole('heading', { name: 'Unstaged changes' }).waitFor();
 
   await page.keyboard.press('?');
-  assert.equal(await page.getByRole('dialog', { name: 'Keyboard shortcuts' }).isVisible(), true);
+  assert.equal(await page.getByRole('dialog', { name: 'Help' }).isVisible(), true);
   const packageJson = JSON.parse(
     await readFile(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
   );
@@ -318,7 +318,7 @@ test('browser review flow: tree, navigation, resize, comments, and shortcuts', a
     await page.getByRole('link', { name: 'Vitalii Rybachenko' }).getAttribute('href'),
     'https://ribachenko.com',
   );
-  const closeButton = page.getByRole('button', { name: 'Close shortcuts' });
+  const closeButton = page.getByRole('button', { name: 'Close help' });
   assert.deepEqual(
     await closeButton.evaluate((node) => [node.offsetWidth, node.offsetHeight]),
     [32, 32],
@@ -334,11 +334,15 @@ test('browser review flow: tree, navigation, resize, comments, and shortcuts', a
   });
   assert.ok(iconOffset.every((offset) => Math.abs(offset) < 1));
   await page.keyboard.press('Escape');
-  assert.equal(await page.getByRole('dialog', { name: 'Keyboard shortcuts' }).isVisible(), false);
-  assert.equal(
-    await page.locator('.top-actions button').last().getAttribute('aria-label'),
-    'Keyboard shortcuts',
-  );
+  assert.equal(await page.getByRole('dialog', { name: 'Help' }).isVisible(), false);
+  await page.keyboard.press('?');
+  const helpDialog = page.getByRole('dialog', { name: 'Help' });
+  const helpBox = await helpDialog.locator('.dialog-panel').boundingBox();
+  await page.mouse.click(helpBox.x + 5, helpBox.y + helpBox.height - 5);
+  assert.equal(await helpDialog.isVisible(), true);
+  await page.mouse.click(5, 5);
+  await helpDialog.waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('.top-actions button').last().getAttribute('aria-label'), 'Help');
 
   const firstPath = await page.locator('.file-row.active').getAttribute('data-path');
   await page.keyboard.press('j');
@@ -620,4 +624,29 @@ test('copying comments in a folder of repositories includes every repository', a
   await page.keyboard.press('Shift+c');
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), 'api/\napi.txt:1 api');
   assert.equal(await button.innerText(), 'Copy & clear all comments · 1');
+});
+
+test('a small change in a large file starts expanded', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'difero-browser-small-change-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.email', 'test@example.com');
+  git(root, 'config', 'user.name', 'Test');
+  git(root, 'config', 'commit.gpgsign', 'false');
+  const lines = Array.from({ length: 600 }, (_, index) => `line ${index + 1}`);
+  await writeFile(join(root, 'file.txt'), `${lines.join('\n')}\n`);
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'initial');
+  lines[300] = 'changed';
+  await writeFile(join(root, 'file.txt'), `${lines.join('\n')}\n`);
+
+  const { server, url } = await startServer({ cwd: root, assetsDir });
+  t.after(() => closeServer(server));
+  const browser = await chromium.launch({ headless: true });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(url);
+  const toggle = page.locator('.diff-card-toggle');
+  await toggle.waitFor();
+  assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
 });

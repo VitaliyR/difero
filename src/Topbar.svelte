@@ -163,8 +163,8 @@
     <button
       type="button"
       class="help-button"
-      aria-label="Keyboard shortcuts"
-      {@attach tooltip('Keyboard shortcuts (?)')}
+      aria-label="Help"
+      {@attach tooltip('Help (?)')}
       onclick={onHelp}
     >
       ?
@@ -244,7 +244,7 @@
             onHelp();
           }}
         >
-          Shortcuts
+          Help
         </button>
       {/snippet}
     </Menu>

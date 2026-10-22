@@ -12,6 +12,7 @@
     ['Next file', 'J'],
     ['Previous file', 'K'],
     ['Reload changes', 'R'],
+    ['Toggle unified/split view', 'S'],
     ['Copy and clear comments', 'C'],
     ['Copy and keep comments', 'Alt+C'],
     ...(workspace ? [['Copy this repository only', 'Shift+C']] : []),
@@ -31,42 +32,64 @@
   aria-labelledby="shortcuts-title"
   bind:this={dialog}
   oncancel={() => (open = false)}
-  onclose={() => (open = false)}
+  onclose={() => (open = dialog.open)}
+  onclick={(event) => event.target === dialog && (open = false)}
 >
-  <div class="dialog-heading">
-    <h2 id="shortcuts-title">Keyboard shortcuts</h2>
-    <button
-      id="close-shortcuts"
-      type="button"
-      aria-label="Close shortcuts"
-      onclick={() => (open = false)}
-    >
-      <span class="close-icon" style={`mask-image:url('${closeIcon}')`} aria-hidden="true"></span>
-    </button>
-  </div>
-  {#each shortcuts as [label, key] (label)}<div class="shortcut-row">
-      <span>{label}</span>
-      <kbd>{key}</kbd>
-    </div>{/each}
-  <div class="shortcuts-footer">
-    <p>
-      Made with ❤️ by <a href="https://ribachenko.com" target="_blank" rel="noopener noreferrer">
-        Vitalii Rybachenko
-      </a>
-    </p>
-    <span class="app-version">v{version}</span>
+  <div class="dialog-panel">
+    <div class="dialog-heading">
+      <h2 id="shortcuts-title">Help</h2>
+      <button
+        id="close-shortcuts"
+        type="button"
+        aria-label="Close help"
+        onclick={() => (open = false)}
+      >
+        <span class="close-icon" style={`mask-image:url('${closeIcon}')`} aria-hidden="true"></span>
+      </button>
+    </div>
+    {#each shortcuts as [label, key] (label)}<div class="shortcut-row">
+        <span>{label}</span>
+        <kbd>{key}</kbd>
+      </div>{/each}
+    <div class="shortcuts-footer">
+      <p>
+        Made with ❤️ by <a href="https://ribachenko.com" target="_blank" rel="noopener noreferrer">
+          Vitalii Rybachenko
+        </a>
+      </p>
+      <span class="app-version">v{version}</span>
+    </div>
   </div>
 </dialog>
 
 <style>
   .shortcuts-dialog {
-    width: min(410px, calc(100vw - 32px));
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 16px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+  }
+  .shortcuts-dialog[open] {
+    display: grid;
+    place-items: center;
+  }
+  .dialog-panel {
+    width: min(410px, 100%);
+    max-height: 100%;
+    overflow: auto;
     padding: 0 22px 20px;
     border: 1px solid var(--border-strong);
     border-radius: 12px;
     background: var(--surface-raised);
-    color: var(--text);
     box-shadow: 0 25px 90px var(--shadow);
+  }
+  .dialog-panel:focus {
+    outline: none;
   }
   .shortcuts-dialog::backdrop {
     background: var(--overlay);
