@@ -11,6 +11,7 @@
     base,
     branches,
     loading,
+    stale,
     staging,
     commentCount,
     otherCommentCount,
@@ -154,11 +155,12 @@
       type="button"
       class="icon-button"
       class:loading
-      aria-label="Reload changes"
-      {@attach tooltip('Reload changes (R)')}
+      aria-label={stale ? 'Reload changes (files changed)' : 'Reload changes'}
+      {@attach tooltip(stale ? 'Files changed — reload (R)' : 'Reload changes (R)')}
       onclick={onReload}
     >
       <span class="reload-icon">↻</span>
+      {#if stale}<span class="stale-dot" aria-hidden="true"></span>{/if}
     </button>
     <button
       type="button"
@@ -174,7 +176,8 @@
     <Menu label="Actions" triggerClass="icon-button actions-button" align="right">
       {#snippet trigger()}
         <span class="mask-icon" style={`mask-image:url('${moreIcon}')`} aria-hidden="true"></span>
-        {#if commentCount}<span class="badge">{commentCount}</span>{/if}
+        {#if commentCount}<span class="badge">{commentCount}</span>
+        {:else if stale}<span class="stale-dot" aria-hidden="true"></span>{/if}
       {/snippet}
       {#snippet children(close)}
         <button
@@ -234,7 +237,7 @@
             onReload();
           }}
         >
-          Reload changes
+          Reload changes{#if stale}<span class="stale-dot inline" aria-hidden="true"></span>{/if}
         </button>
         <button
           type="button"
@@ -385,6 +388,26 @@
   .reload-icon {
     display: block;
     line-height: 1;
+  }
+  .icon-button {
+    position: relative;
+  }
+  .stale-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+  .stale-dot.inline {
+    position: static;
+    display: inline-block;
+    margin-left: 8px;
+    vertical-align: middle;
+    box-shadow: none;
   }
   .icon-button:disabled {
     opacity: 0.45;

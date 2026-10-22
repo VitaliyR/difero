@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { serveAsset } from './assets.mjs';
 import { countChanges, findRepo, findRepos, findRoot, stageAll, undoStageAll } from './git.mjs';
 import { createSnapshots, serveDiff, serveFile } from './routes/diff.mjs';
+import { createEvents } from './routes/events.mjs';
 import { serveImage } from './routes/image.mjs';
 
 async function openWorkspace(cwd) {
@@ -53,6 +54,7 @@ export async function startServer({ cwd, assetsDir, port = 0, fallbackToFreePort
   const { root, repos } = await openWorkspace(cwd);
   const workspace = Boolean(repos);
   const snapshots = createSnapshots();
+  const events = createEvents();
   async function repoRoot(url) {
     if (!workspace) return root;
     const repo = await findRepo(root, url.searchParams.get('repo'));
@@ -90,6 +92,10 @@ export async function startServer({ cwd, assetsDir, port = 0, fallbackToFreePort
         await serveDiff(response, url, { root: repo, cwd: workspace ? repo : cwd, snapshots });
         return;
       }
+      if (url.pathname === '/api/events') {
+        await events.serve(response, await repoRoot(url));
+        return;
+      }
       if (url.pathname === '/api/file') {
         serveFile(response, url, { snapshots });
         return;
@@ -106,6 +112,11 @@ export async function startServer({ cwd, assetsDir, port = 0, fallbackToFreePort
       response.end(error.code === 'ENOENT' ? 'Not found' : error.message);
     }
   });
+  const close = server.close.bind(server);
+  server.close = (callback) => {
+    events.close();
+    return close(callback);
+  };
   await listenWithFallback(server, port, fallbackToFreePort);
   return { server, root, repos, url: `http://127.0.0.1:${server.address().port}/` };
 }

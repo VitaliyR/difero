@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFile, readdir, lstat, readlink, stat } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -83,6 +84,36 @@ export async function countChanges(root) {
     if (/^[RC]/.test(fields[index])) index++;
   }
   return count;
+}
+
+// Changes whenever the review could change: a new HEAD, a path changing status, or a changed
+// path being written again. --no-optional-locks keeps git status from touching the index.
+export async function changeVersion(root) {
+  const [head, status] = await Promise.all([
+    git(root, ['rev-parse', '--verify', '--quiet', 'HEAD'], {
+      encoding: 'utf8',
+      allowMissing: true,
+    }),
+    git(root, ['--no-optional-locks', 'status', '--porcelain=v1', '-z', '--untracked-files=all'], {
+      encoding: 'utf8',
+    }),
+  ]);
+  const fields = status.split('\0');
+  const changed = [];
+  for (let index = 0; index < fields.length; index++) {
+    if (!fields[index]) continue;
+    changed.push(fields[index].slice(3));
+    if (/^[RC]/.test(fields[index])) index++;
+  }
+  const stats = await mapLimit(changed, 16, (path) =>
+    lstat(join(root, path)).then(
+      ({ mtimeMs, size }) => `${mtimeMs}:${size}`,
+      () => '-',
+    ),
+  );
+  return createHash('sha1')
+    .update(`${head ?? ''}\0${status}\0${stats.join('\0')}`)
+    .digest('hex');
 }
 
 const TREE_ID = /^[0-9a-f]{40}([0-9a-f]{24})?$/;

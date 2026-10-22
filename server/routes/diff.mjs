@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { getChanges } from '../git.mjs';
+import { changeVersion, getChanges } from '../git.mjs';
 
 const MAX_SNAPSHOTS = 4;
 
@@ -17,6 +17,7 @@ export async function serveDiff(response, url, { root, cwd, snapshots }) {
     response.writeHead(400).end('Invalid mode');
     return;
   }
+  const version = await changeVersion(root);
   const data = await getChanges(root, mode, url.searchParams.get('base'));
   const snapshot = randomUUID();
   const contents = new Map();
@@ -36,7 +37,7 @@ export async function serveDiff(response, url, { root, cwd, snapshots }) {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
   });
-  response.end(JSON.stringify({ ...data, files, snapshot, cwd }));
+  response.end(JSON.stringify({ ...data, files, snapshot, cwd, version }));
 }
 
 export function serveFile(response, url, { snapshots }) {

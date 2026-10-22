@@ -79,6 +79,7 @@
   base={review.base}
   branches={review.branches}
   loading={review.loading}
+  stale={review.stale}
   staging={review.staging}
   workspace={Boolean(review.workspace)}
   commentCount={review.comments.length}

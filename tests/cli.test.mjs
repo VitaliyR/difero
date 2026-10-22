@@ -336,3 +336,44 @@ test('a folder without repositories fails to start', async (t) => {
   await mkdir(join(parent, 'plain'));
   await assert.rejects(startServer({ cwd: parent, assetsDir: parent }), /not a git repository/);
 });
+
+test('the events stream reports a new version when files change', async (t) => {
+  const root = await makeRepo(t);
+  execFileSync('git', ['-C', root, 'config', 'core.excludesFile', '/dev/null']);
+  await writeFile(join(root, 'a.txt'), 'one\n');
+  const { server } = await startServer({ cwd: root, assetsDir: root });
+  t.after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { version } = await (await fetch(`${base}/api/diff?mode=all`)).json();
+  assert.match(version, /^[0-9a-f]{40}$/);
+
+  const response = await fetch(`${base}/api/events`);
+  assert.equal(response.headers.get('content-type'), 'text/event-stream; charset=utf-8');
+  const versions = [];
+  const reading = (async () => {
+    let buffer = '';
+    for await (const chunk of response.body.pipeThrough(new TextDecoderStream())) {
+      buffer += chunk;
+      for (const [, data] of buffer.matchAll(/^data: (.*)\n\n/gm)) {
+        versions.push(JSON.parse(data).version);
+      }
+      buffer = buffer.slice(buffer.lastIndexOf('\n\n') + 2);
+    }
+  })();
+  t.after(() => reading.catch(() => {}));
+  const waitFor = async (count) => {
+    while (versions.length < count) await delay(20);
+  };
+
+  await waitFor(1);
+  assert.deepEqual(versions, [version]);
+  await mkdir(join(root, 'node_modules'));
+  await writeFile(join(root, 'node_modules', 'dep.js'), 'x\n');
+  await delay(1000);
+  assert.deepEqual(versions, [version]);
+
+  await writeFile(join(root, 'a.txt'), 'one\ntwo\n');
+  await waitFor(2);
+  assert.notEqual(versions[1], version);
+  assert.equal((await (await fetch(`${base}/api/diff?mode=all`)).json()).version, versions[1]);
+});

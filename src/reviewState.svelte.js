@@ -50,6 +50,11 @@ export class ReviewState {
   toastMessage = $state('');
   toastVisible = $state(false);
   toastAction = $state.raw(null);
+  loadedVersion = $state('');
+  latestVersion = $state('');
+  stale = $derived(
+    Boolean(this.loadedVersion && this.latestVersion && this.loadedVersion !== this.latestVersion),
+  );
   commentsByPath = $derived(groupByPath(this.comments, this.previousGroups));
   previousGroups = new Map();
   request = 0;
@@ -57,6 +62,8 @@ export class ReviewState {
   expiredSnapshot = null;
   navigation = null;
   diffs = new Map();
+  events = null;
+  eventsRepo = null;
   toastTimer;
 
   commentsFor(path) {
@@ -237,7 +244,26 @@ export class ReviewState {
     }
   }
 
+  watchChanges(repo) {
+    if (this.events && this.eventsRepo === repo) return;
+    this.unwatchChanges();
+    const params = new URLSearchParams(this.workspace ? { repo } : {});
+    this.eventsRepo = repo;
+    this.events = new EventSource(`/api/events?${params}`);
+    this.events.onmessage = (event) => {
+      this.latestVersion = JSON.parse(event.data).version;
+    };
+  }
+
+  unwatchChanges() {
+    this.events?.close();
+    this.events = null;
+    this.eventsRepo = null;
+    this.latestVersion = '';
+  }
+
   clearRepo() {
+    this.unwatchChanges();
     this.request++;
     this.repo = '';
     this.loadedRepo = '';
@@ -288,6 +314,8 @@ export class ReviewState {
       this.snapshot = result.snapshot;
       this.loadedMode = result.mode;
       this.loadedRepo = this.workspace ? params.get('repo') : '';
+      this.loadedVersion = result.version;
+      this.watchChanges(this.loadedRepo);
       this.loadedBase = result.base || '';
       this.branches = result.branches || [];
       if (result.mode === 'base') this.base = result.base || '';
@@ -550,6 +578,7 @@ export class ReviewState {
   }
 
   destroy() {
+    this.unwatchChanges();
     clearTimeout(this.toastTimer);
   }
 }
