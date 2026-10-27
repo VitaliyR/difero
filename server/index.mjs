@@ -46,7 +46,7 @@ async function serveRepos(response, { root, workspace, reveal }) {
           path,
           changes: await countChanges(path).catch(() => null),
         })),
-      )
+      ).then((list) => list.sort((a, b) => Boolean(b.changes) - Boolean(a.changes)))
     : [];
   sendJson(response, { workspace: workspace ? root : null, repos, reveal });
 }
