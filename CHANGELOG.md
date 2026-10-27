@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/VitaliyR/difero/compare/difero-v1.5.0...difero-v1.6.0) (2026-10-27)
+
+
+### Features
+
+* sort repos with changes on the top of the list ([3ebfc37](https://github.com/VitaliyR/difero/commit/3ebfc371e00e76a8dfee5b73a55e4a211ffd95f2))
+
 ## [1.5.0](https://github.com/VitaliyR/difero/compare/difero-v1.4.0...difero-v1.5.0) (2026-10-22)
 
 

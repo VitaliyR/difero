@@ -1,6 +1,6 @@
 {
   "name": "difero",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "packageManager": "pnpm@12.11.2",
   "description": "A fast local review UI for staged, unstaged, and untracked Git changes",
   "repository": {
