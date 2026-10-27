@@ -66,6 +66,8 @@ function createWatcher(root, onEmpty) {
       onEmpty();
     },
     close() {
+      clearTimeout(timer);
+      watcher?.close();
       for (const response of clients) response.end();
     },
   };
@@ -75,6 +77,7 @@ export function createEvents() {
   const watchers = new Map();
   return {
     async serve(response, root) {
+      if (response.destroyed) return;
       let entry = watchers.get(root);
       if (!entry) {
         entry = createWatcher(root, () => watchers.delete(root));
