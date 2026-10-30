@@ -1,8 +1,10 @@
 <script>
   let { id, text } = $props();
+
+  const display = $derived(text.replaceAll('/', '/​'));
 </script>
 
-<div {id} class="difero-tooltip" role="tooltip">{text}</div>
+<div {id} class="difero-tooltip" role="tooltip">{display}</div>
 
 <style>
   .difero-tooltip {
@@ -19,5 +21,6 @@
     line-height: 1.4;
     pointer-events: none;
     white-space: pre-line;
+    overflow-wrap: anywhere;
   }
 </style>
