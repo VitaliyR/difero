@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/VitaliyR/difero/compare/difero-v1.6.0...difero-v1.6.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* tooltip overlay in sidebar ([f96b43a](https://github.com/VitaliyR/difero/commit/f96b43a53968d405dda8ef563f8e394bc0de0c12))
+
 ## [1.6.0](https://github.com/VitaliyR/difero/compare/difero-v1.5.0...difero-v1.6.0) (2026-10-27)
 
 
