@@ -269,10 +269,10 @@ test('a folder of repositories serves each one by name', async (t) => {
   const listing = await (await fetch(`${base}/api/repos`)).json();
   assert.equal(listing.workspace, parent);
   assert.deepEqual(
-    listing.repos.map(({ name, changes }) => [name, changes]),
+    listing.repos.map(({ name, changes, staged, unstaged }) => [name, changes, staged, unstaged]),
     [
-      ['web', 1],
-      ['api', 0],
+      ['web', 1, 0, 1],
+      ['api', 0, 0, 0],
     ],
   );
   const diff = await (await fetch(`${base}/api/diff?mode=all&repo=web`)).json();

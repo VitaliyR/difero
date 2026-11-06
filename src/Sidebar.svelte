@@ -64,7 +64,16 @@
             aria-hidden="true"
           ></span>
           <span class="file-name">{item.name}</span>
-          {#if item.changes}<span class="repo-changes">{item.changes}</span>{/if}
+          {#if item.changes}
+            <span
+              class="repo-changes"
+              aria-label={`${item.staged} staged, ${item.unstaged} unstaged`}
+            >
+              <span class:staged={item.staged}>{item.staged}</span>
+              /
+              <span class:unstaged={item.unstaged}>{item.unstaged}</span>
+            </span>
+          {/if}
         </button>
       {:else}
         <div class="sidebar-empty">
@@ -234,6 +243,13 @@
   .repo-changes {
     color: var(--text-subtle);
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .repo-changes .staged {
+    color: var(--add);
+  }
+  .repo-changes .unstaged {
+    color: var(--text-muted);
   }
   .repo-row,
   .file-row,

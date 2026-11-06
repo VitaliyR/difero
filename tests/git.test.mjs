@@ -277,8 +277,13 @@ test('findRepos lists child repositories and countChanges counts their changed f
     { name: 'api', path: api },
     { name: 'web', path: join(parent, 'web') },
   ]);
-  assert.equal(await countChanges(api), 2);
-  assert.equal(await countChanges(join(parent, 'web')), 0);
+  await writeFile(join(api, 'new.txt'), 'edited\n');
+  assert.deepEqual(await countChanges(api), { changes: 2, staged: 1, unstaged: 2 });
+  assert.deepEqual(await countChanges(join(parent, 'web')), {
+    changes: 0,
+    staged: 0,
+    unstaged: 0,
+  });
 });
 
 test('undoing stageAll keeps what was staged before it', async (t) => {

@@ -44,7 +44,7 @@ async function serveRepos(response, { root, workspace, reveal }) {
         (await findRepos(root)).map(async ({ name, path }) => ({
           name,
           path,
-          changes: await countChanges(path).catch(() => null),
+          ...(await countChanges(path).catch(() => ({ changes: null }))),
         })),
       ).then((list) => list.sort((a, b) => Boolean(b.changes) - Boolean(a.changes)))
     : [];

@@ -77,14 +77,17 @@ export async function countChanges(root) {
     encoding: 'utf8',
   });
   const fields = output.split('\0');
-  let count = 0;
+  const counts = { changes: 0, staged: 0, unstaged: 0 };
   for (let index = 0; index < fields.length; index++) {
     if (!fields[index]) continue;
-    count++;
+    const [x, y] = fields[index];
+    counts.changes++;
+    if (x !== ' ' && x !== '?') counts.staged++;
+    if (y !== ' ') counts.unstaged++;
     // Renames and copies are followed by their original path.
     if (/^[RC]/.test(fields[index])) index++;
   }
-  return count;
+  return counts;
 }
 
 // Changes whenever the review could change: a new HEAD, a path changing status, or a changed
