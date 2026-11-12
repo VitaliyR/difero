@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/VitaliyR/difero/compare/difero-v1.6.1...difero-v1.6.2) (2026-11-12)
+
+
+### Bug Fixes
+
+* toast comment deletion and ability to restore the comment ([e3beaf7](https://github.com/VitaliyR/difero/commit/e3beaf73467042d40dfc51b30c7e0f8284363359))
+
 ## [1.6.1](https://github.com/VitaliyR/difero/compare/difero-v1.6.0...difero-v1.6.1) (2026-11-06)
 
 
