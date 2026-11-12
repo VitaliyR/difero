@@ -595,8 +595,30 @@ export class ReviewState {
   }
 
   deleteComment(id) {
+    const index = this.comments.findIndex((item) => item.id === id);
+    if (index === -1) return;
+    const comment = this.comments[index];
+    const root = this.root;
     this.comments = this.comments.filter((item) => item.id !== id);
     this.saveComments();
+    this.toast('Comment deleted', {
+      label: 'Undo',
+      run: () => this.restoreComment(root, comment, index),
+    });
+  }
+
+  restoreComment(root, comment, index) {
+    const current = root === this.root ? this.comments : this.readComments(root);
+    if (current.some(({ id }) => id === comment.id)) return;
+    const restored = current.toSpliced(Math.min(index, current.length), 0, comment);
+    if (root === this.root) {
+      this.comments = restored;
+      this.saveComments();
+    } else {
+      localStorage.setItem(this.commentsKey(root), JSON.stringify(restored));
+      this.loadOtherComments();
+    }
+    this.toast('Comment restored');
   }
 
   destroy() {

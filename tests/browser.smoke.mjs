@@ -417,6 +417,11 @@ test('browser review flow: tree, navigation, resize, comments, and shortcuts', a
   );
   await deleteComment.click();
   assert.equal(await freshCard.getByText('Comment · src/fresh.js:2').count(), 0);
+  assert.match(await page.locator('#toast').innerText(), /Comment deleted/);
+  await page.locator('.toast-action').click();
+  await freshCard.getByText('Comment · src/fresh.js:2').waitFor();
+  await deleteComment.click();
+  assert.equal(await freshCard.getByText('Comment · src/fresh.js:2').count(), 0);
   await page.keyboard.press('c');
   await page.waitForFunction(() => document.querySelector('.copy-button')?.disabled);
   await page.locator('.toast-action').click();
