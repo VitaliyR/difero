@@ -27,6 +27,17 @@
   );
   let additions = $derived(files.reduce((total, file) => total + file.additions, 0));
   let deletions = $derived(files.reduce((total, file) => total + file.deletions, 0));
+
+  let fileList;
+  $effect(() => {
+    if (!activeFile || !fileList) return;
+    const row = fileList.querySelector(`.file-row[data-path="${CSS.escape(activeFile)}"]`);
+    if (!row) return;
+    const list = fileList.getBoundingClientRect();
+    const rect = row.getBoundingClientRect();
+    if (rect.top < list.top) fileList.scrollTop += rect.top - list.top;
+    else if (rect.bottom > list.bottom) fileList.scrollTop += rect.bottom - list.bottom;
+  });
 </script>
 
 <aside class="sidebar">
@@ -88,7 +99,7 @@
       {files.length}
     </span>
   </div>
-  <div id="file-list" class="file-list">
+  <div id="file-list" class="file-list" bind:this={fileList}>
     {#each rows as row (row.kind + row.path)}
       {#if row.kind === 'folder'}
         <button
